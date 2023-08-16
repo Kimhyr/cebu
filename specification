@@ -1,0 +1,4 @@
+# Definitions
+<function-definition> = <function-signature> ('=' <expression> ';'|'{' +[<statement>] '}')
+
+<function-signature> = <>
