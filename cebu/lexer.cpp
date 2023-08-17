@@ -182,3 +182,13 @@ bool lexer::next_escaped_character()
 }
 
 }
+
+auto operator<<(std::ostream& os, cebu::token_type const& token) -> std::ostream&
+{
+    return os << std::format("{}", token);
+}
+
+auto operator<<(std::ostream& os, cebu::any_token const& token) -> std::ostream&
+{
+    return os << std::format("{}", token);
+}

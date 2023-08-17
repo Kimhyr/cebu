@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <format>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <sstream>
 #include <string_view>
@@ -77,6 +78,24 @@ enum class token_type
 };
 
 class any_token;
+
+enum class primitive_type
+{
+    b8 = static_cast<int>(token_type::b8),
+    b16,
+    b32,
+    b64,
+    b128,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    f16,
+    f32,
+    f64,
+    f128
+};
 
 template<typename Value>
 class basic_token
@@ -241,40 +260,35 @@ class any_token
     friend class basic_token;
 
 public:
-    operator token_type() const noexcept
-    {
-        return m_type;
-    }
+    any_token() = default;
 
-    operator identifier_token() const noexcept
-    {
-        return {*this};
-    }
+    any_token(token_type type) noexcept
+        : m_type{type}
+    {}
 
-    operator number_token() const noexcept
-    {
-        return {*this};
-    }
+    any_token(token_type type, std::string_view value) noexcept
+        : m_value{.string = value}
+        , m_type{type}
+    {}
 
-    operator character_token() const noexcept
-    {
-        return {*this};
-    }
+    any_token(std::size_t value) noexcept
+        : m_value{.number = value}
+        , m_type{token_type::number}
+    {}
 
-    operator string_token() const noexcept
-    {
-        return {*this};
-    }
+    any_token(char value) noexcept
+        : m_value{.character = value}
+        , m_type{token_type::character}
+    {}
 
-    operator keyword_token() const noexcept
-    {
-        return {*this};
-    }
-
-    operator punctuator_token() const noexcept
-    {
-        return {*this};
-    }
+    operator token_type() const noexcept { return m_type; }
+    operator identifier_token() const noexcept { return {*this}; }
+    operator number_token() const noexcept { return {*this}; }
+    operator character_token() const noexcept { return {*this}; }
+    operator string_token() const noexcept { return {*this}; }
+    operator keyword_token() const noexcept { return {*this}; }
+    operator punctuator_token() const noexcept { return {*this}; }
+    operator primitive_type() const noexcept { return *reinterpret_cast<primitive_type*>(const_cast<token_type*>(&m_type)); }
 
     [[nodiscard]]
     auto position() const noexcept -> position const&
@@ -311,25 +325,79 @@ basic_token<T>::basic_token(any_token const& token) noexcept
     m_position = token.position();
 }
 
-class lexing_error
-    : public std::exception
+class lexer
 {
 public:
-    lexing_error(struct position position)
-        : m_position{position}
-    {}
+    static std::unordered_map<std::string_view, token_type> word_map;
         
-    [[nodiscard]]
-    auto position() const noexcept -> position const&
+    lexer(source_file const& file)
+        : m_file{&file}
+        , m_pointer{m_file->map()}
+        , m_row{m_pointer}
+        , m_row_number{1}
+    {}
+
+    ~lexer() = default;
+
+    void next(any_token& out);
+
+    void swap_file(source_file const& file) noexcept
     {
-        return m_position;
-    } 
+        m_file = &file;
+    }
 
     [[nodiscard]]
-    auto what() const noexcept -> char const* override;
+    source_file const& file() const noexcept
+    {
+        return *m_file;
+    }
 
+    [[nodiscard]]
+    position position() const noexcept
+    {
+        return {
+            .row    = m_row_number,
+            .column = static_cast<std::size_t>(m_pointer - m_row)
+        };
+    }
+  
 private:
-    struct position m_position;   
+    source_file const* m_file;
+    char const*        m_pointer;
+    char const*        m_row;
+    std::size_t        m_row_number;
+
+    void consume() noexcept
+    {
+        if (*m_pointer == '\n')
+            m_row = m_pointer;
+        ++m_pointer;
+    }
+
+    char current() const noexcept
+    {
+        return *m_pointer;
+    }
+
+    char peek() const noexcept
+    {
+        return m_pointer[1];
+    }
+
+    bool next_escaped_character();
+};
+
+class lexing_error
+    : public error
+{
+public:
+    using base_type = error;
+    
+    lexing_error(lexer const& lexer)
+        : base_type{error_type::parsing, lexer.location(), }
+    {
+        std::cerr << std::format("[{}] lexing error: {}", location, format) << std::endl;
+    }
 };
 
 class number_overflow_error
@@ -431,68 +499,6 @@ public:
     auto what() const noexcept -> char const* override;
 };
 
-class lexer
-{
-public:
-    static std::unordered_map<std::string_view, token_type> word_map;
-        
-    lexer(source_file const& file)
-        : m_file{&file}
-        , m_pointer{m_file->map()}
-        , m_row{m_pointer}
-        , m_row_number{1}
-    {}
-
-    ~lexer() = default;
-
-    void next(any_token& out);
-
-    void swap_file(source_file const& file) noexcept
-    {
-        m_file = &file;
-    }
-
-    [[nodiscard]]
-    source_file const& file() const noexcept
-    {
-        return *m_file;
-    }
-
-    [[nodiscard]]
-    position position() const noexcept
-    {
-        return {
-            .row    = m_row_number,
-            .column = static_cast<std::size_t>(m_pointer - m_row)
-        };
-    }
-  
-private:
-    source_file const* m_file;
-    char const*        m_pointer;
-    char const*        m_row;
-    std::size_t        m_row_number;
-
-    void consume() noexcept
-    {
-        if (*m_pointer == '\n')
-            m_row = m_pointer;
-        ++m_pointer;
-    }
-
-    char current() const noexcept
-    {
-        return *m_pointer;
-    }
-
-    char peek() const noexcept
-    {
-        return m_pointer[1];
-    }
-
-    bool next_escaped_character();
-};
-
 }
 
 namespace std
@@ -577,3 +583,6 @@ struct formatter<any_token>
 };
 
 }
+
+auto operator<<(std::ostream& os, cebu::token_type const& token) -> std::ostream&;
+auto operator<<(std::ostream& os, cebu::any_token const& token) -> std::ostream&;
