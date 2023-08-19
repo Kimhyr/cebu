@@ -1,254 +1,286 @@
 #pragma once
 #define CEBU_INCLUDED_PARSER_H
 
-#include <iostream>
-#include <tuple>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <type_traits>
-#include <utility>
+#include <unistd.h>
 
-#include <cebu/lexer.h>
+#include <concepts>
+
+#include <cebu/syntax.h>
 
 namespace cebu
 {
 
-struct parsing_error_info
+namespace detail
 {
-    std::string_view file_path;
-    position         position;
-    std::string_view view;
-};
 
-class parsing_error
-    : public error
-{
-};
+template<typename Needle, typename Current, typename ...Haystack>
+struct find_type
+    : std::conditional_t<
+        std::same_as<Needle, Current>,
+        Needle,
+        std::conditional_t<
+            sizeof...(Haystack) != 0,
+            find_type<Needle, Haystack...>,
+            void
+        >
+    >
+{};
+    
+}
+
+template<typename Needle, typename ...Haystack>
+struct find_type : detail::find_type<Needle, Haystack...> {};
+
+template<typename Needle, typename ...Haystack>
+constexpr auto find_type_v = find_type<Needle, Haystack...>::value;
+
+template<typename Needle, typename ...Haystack>
+constexpr auto get_option_v = find_type_v<Needle, Haystack...>;
 
 template<auto V>
-using value_tag_t = char;
+static constexpr bool is_token_array_v =
+    std::is_array_v<decltype(V)>
+    && std::is_same_v<token_type, typename decltype(V)::value_type>;
 
-class unexpected_token_error
-    : public parsing_error
-{
-public:
-    unexpected_token_error(token_type recieved, token_type expected) noexcept
-    {
-        std::cerr << std::format("expected: {}, but recieved: {}", expected, recieved) << std::endl;
-    }
-};
+struct ignore_error : basic_option {};
+struct enable_on_error : basic_option {};
+struct enable_on_success : basic_option {};
 
-class unexpected_token_variant_error
-    : public parsing_error
-{
-public:
-    template<typename ...TokenTypes>
-        requires (std::is_same_v<token_type, TokenTypes>, ...)
-    unexpected_token_variant_error(token_type recieved, TokenTypes... tokens) noexcept
-    {
-        std::string format{std::format("expected one of:\n")};
-        format += (... + std::format("\t{}\n", tokens));
-        format += std::format("but recieved: {}", recieved);
-        std::cerr << format << std::endl;
-    }
-};
-
-template<typename T>
 class parser;
 
-template<>
-class parser<void>
+template<typename T, typename ...Options>
+concept parsable =
+    requires(parser& self, T& out) {
+        { T::template parse<Options...>(self, out) } -> std::same_as<void>;
+    };
+
+enum class parsing_error
+{
+    unexpected_token,
+    unexpected_token_variant
+};
+
+inline auto do_nothing() -> void {}
+
+class parser
 {
 public:
-    template<typename Syntax>
-    auto parse(Syntax& out) -> parser&
+    struct flags
     {
-        parser<Syntax>::parse(*this, out);
+        std::uint32_t
+            error : 1,
+            padding : 31;
+    };
+
+    parser(std::string_view file_path)
+        : m_file_path{file_path}
+    {
+        unsafely_load_file();
+    }
+
+    ~parser()
+    {
+        unload_file();
+    }
+
+    parser& consume();
+    parser& peek(token& out);
+
+    template<auto Token, option ...Options>
+        requires std::is_same_v<decltype(Token), token_type>
+            || std::is_same_v<decltype(Token), token_category>
+    parser& consume_until(
+        std::function<void()> on_success = do_nothing,
+        std::function<void()> on_error = do_nothing
+    )
+    {
+        for (;;) {
+            class token token;
+            peek<Options...>(token);                
+            token.discard();
+            if constexpr(std::is_same_v<decltype(Token), token_category>) {
+                if (token.is_of<Token>()) {
+                    if constexpr(get_option_v<enable_on_success, Options...>)
+                        on_success();
+                    return *this;
+                }
+            } else if constexpr(token == Token) {
+                if constexpr(get_option_v<enable_on_success, Options...>)
+                    on_success();
+                return *this;
+            }
+        }
+        if constexpr(get_option_v<enable_on_error, Options...>)
+            resolve_error(on_error);
         return *this;
     }
 
-    auto consume() noexcept -> parser&
-    {
-        m_lexer.next(m_token);
+    template<auto Tokens, option ...Options>
+        requires is_token_array_v<Tokens>
+    parser& consume_until_one_of(
+        std::function<void()> on_error = do_nothing
+    ) {
+        for (;;) {
+            class token token;
+            peek(token);
+            token.discard();
+            if (token == Tokens)
+                return *this;
+            consume();
+        }
+        if constexpr(get_option_v<enable_on_error, Options...>)
+            resolve_error(on_error);
         return *this;
     }
 
-    template<token_type Expectation>
-    auto expect() -> parser&
-    {
-        consume();
-        if (token() != Expectation)
-            throw unexpected_token_error{Expectation, token()};
+    template<parsable Syntax, option ...Options>
+    parser& parse(
+        Syntax& out,
+        std::function<void()> on_success = do_nothing,
+        std::function<void()> on_error = do_nothing
+    ) {
+        Syntax::template parse<Options...>(*this, out);
+        if constexpr(!get_option_v<ignore_error, Options...>) {
+            if (error()) {
+                if constexpr(get_option_v<enable_on_error, Options...>) {
+                    // use the first function if `on_success` is disabled.
+                    if constexpr(get_option_v<enable_on_success, Options...>)
+                        resolve_error(on_error);
+                    else on_success();
+                }
+            }
+        } else if constexpr(get_option_v<enable_on_success, Options...>)
+            on_success();
         return *this;
     }
 
-    template<token_type ...Expectations>
-    auto expect_one_of() -> parser&
-    {
-        consume();
-        if (!token_is_one_of<Expectations...>()) [[unlikely]]
-            throw unexpected_token_variant_error{token(), Expectations...};
-        return *this;
-    }
-
-    template<token_type ...Values>
-    auto token_is_one_of() const noexcept
-        -> bool
-    {
-        return !((Values != token()) && ...);
-    }
-
-    auto then(std::function<void()> fn) -> parser&
+    parser& then(std::function<void()> fn)
     {
         fn();
         return *this;
     }
 
+    parser& resolve_error(std::function<void()> fn)
+    {
+        if (error()) [[unlikely]] {
+            fn();
+            clear_error();
+        }
+        return *this;
+    }
+
+    template<token_type Token, option ...Options>
+    parser& expect(
+        std::function<void()> on_success = do_nothing,
+        std::function<void()> on_error = do_nothing
+    )
+    {
+        consume<Options...>();
+        if (token() != Token) [[unlikely]] {
+            report_error<parsing_error::unexpected_token>();
+            if constexpr(get_option_v<enable_on_error, Options...>)
+                on_error();
+        } else if constexpr(get_option_v<enable_on_success, Options...>)
+            on_success();
+        return *this;
+    }
+
+    template<auto Tokens, option ...Options>
+        requires is_token_array_v<Tokens>
+    parser& expect_one_of(
+        std::function<void()> on_success = do_nothing,
+        std::function<void()> on_error = do_nothing
+    )
+    {
+        consume<Options...>();
+        if (token() != Tokens) [[unlikely]] {
+            report_error<parsing_error::unexpected_token_variant>();
+            if constexpr(get_option_v<enable_on_error, Options...>)
+                resolve_error(on_error);
+            else if constexpr(!get_option_v<ignore_error, Options...>)
+                set_error();
+        } else if constexpr(get_option_v<enable_on_success, Options...>)
+            on_success();
+        return *this;
+    }
+
     [[nodiscard]]
-    auto token() const noexcept -> any_token const&
+    flags& flags() noexcept
+    {
+        return m_flags;
+    }
+
+    [[nodiscard]]
+    bool error() const noexcept
+    {
+        return m_flags.error;
+    }
+
+    parser& set_error() noexcept
+    {
+        m_flags.error = true;
+        return *this;
+    }
+
+    parser& clear_error() noexcept
+    {
+        m_flags.error = false;
+        return *this;
+    }
+
+    template<parsing_error Error>
+    void report_error() const noexcept;
+
+    parser& load_file()
+    {
+        unload_file();
+        unsafely_load_file();
+        return *this;
+    }
+
+    parser& unload_file()
+    {
+        if (m_source.empty())
+            munmap(m_source.data(), file_size());
+        return *this;
+    }
+
+    [[nodiscard]]
+    token const& token() const noexcept
     {
         return m_token;
     }
 
-private:
-    lexer     m_lexer;
-    any_token m_token;
-};
-
-struct identifier
-{
-    std::string_view name;
-};
-
-enum class type_type
-{
-    primitive
-};
-
-struct type
-{
-    union {
-        primitive_type primitive;
-    } value;
-    type_type type;
-
-    operator primitive_type&()
+    [[nodiscard]]
+    position position() const noexcept
     {
-        return value.primitive;
+        return {
+            .row = m_row_number,
+            .column = static_cast<std::size_t>(m_pointer - m_row)
+        };
     }
-};
 
-struct type_cast
-{
-    type type;
-};
-
-struct value_definition
-{
-    identifier identifier;
-    type_cast  type_cast;   
-};
-
-struct let_statement
-{
-    identifier identifier;
-    type_cast  type_cast;
-};
-
-enum class statement_type
-{
-    let = static_cast<int>(token_type::let)
-};
-
-struct statement
-{
-    union {
-        let_statement let;
-    } value;
-    statement_type type;
-};
-
-template<>
-class parser<identifier>
-{
-public:
-    static auto parse(parser<void>& self, identifier& out) -> parser<void>&
+    [[nodiscard]]
+    std::size_t file_size() const noexcept
     {
-        return self
-            .expect<token_type::identifier>()
-            .then([&]() -> void
-            {
-                out.name = static_cast<identifier_token>(self.token()).value();
-            });
+        return m_source.size();
     }
-};
 
-template<>
-class parser<type>
-{
-public:
-    static auto parse(parser<void>& self, type& out) -> parser<void>&
-    {
-        return self
-            .consume()
-            .then([&]
-            {
-                if (self.token() <= token_type::b8 && self.token() >= token_type::f128) {
-                    out.type            = type_type::primitive;
-                    out.value.primitive = self.token();
-                    return;
-                }
-                throw unexpected_token_variant_error(
-                    self.token(),
-                    token_type::b8,
-                    token_type::b16,
-                    token_type::b32,
-                    token_type::b64,
-                    token_type::b128,
-                    token_type::i8,
-                    token_type::i16,
-                    token_type::i32,
-                    token_type::i64,
-                    token_type::i128,
-                    token_type::f16,
-                    token_type::f32,
-                    token_type::f64,
-                    token_type::f128
-                );
-            });
-    }
-};
+private:       
+    std::string m_source;
+    std::string::const_iterator m_pointer;
+    std::string::const_iterator m_row;
+    std::string_view m_file_path;
+    std::size_t m_row_number;
+    class token m_token;
+    struct flags m_flags;
+    int m_scope_depth;
 
-template<>
-class parser<type_cast>
-{
-public:
-    static auto parse(parser<void>& self, type_cast& out) -> parser<void>&
-    {
-        return self
-            .expect<token_type::colon>()
-            .parse(out.type);
-    }
-};
-
-template<>
-class parser<let_statement>
-{
-public:
-    static auto parse(parser<void>& self, let_statement& out) -> parser<void>&
-    {
-        return self
-            .parse(out.identifier)
-            .parse(out.type_cast);
-    }
-};
-
-template<>
-class parser<statement>
-{
-public:
-    static auto parse(parser<void>& self, statement& out) -> parser<void>&
-    {
-        return self;
-    }
+    void unsafely_load_file();
 };
 
 }

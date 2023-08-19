@@ -1,0 +1,17 @@
+method fib(n: b32) -> b32 =
+    n == (0 | 1) => n,
+        fib(n - 1) + fib(n - 2);
+
+method fib2(n: b32) -> b32:
+    if n == (0 | 1):
+        return n;
+    else:
+        return fib2(n - 1) + fib2(n - 2);
+
+method fib3(n: b32) -> b32 {
+    if n == (0 | 1) {
+        return n;
+    } else {
+        return fib2(n - 1) + fib3(n - 2);
+    }
+}

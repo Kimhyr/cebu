@@ -77,8 +77,7 @@ struct std::formatter<cebu::error_type>
             break;
         }
         return formatter<string>::format(std::format(
-            "{}",
-            str
+            "{}", str
         ), ctx);
     }
 };
@@ -93,9 +92,7 @@ public:
     error(
         error_type                   type,
         location                     location,
-        std::string                  message,
-        std::function<void(Args...)> recover,
-        Args&&...                    args
+        std::string                  message
     ) noexcept
     {
         std::string format{std::format(
@@ -103,33 +100,7 @@ public:
             type, location, message
         )};
         std::cerr << format << std::endl;
-        recover(std::forward<Args>(args)...);
     }
-};
-
-class source_file
-{
-public:
-    source_file(std::string_view path);
-
-    ~source_file();
-
-    [[nodiscard]]
-    char const* map() const noexcept
-    { return m_map; }
-
-    [[nodiscard]]
-    std::string_view const& path() const noexcept
-    { return m_path; }
-
-    [[nodiscard]]
-    std::size_t size() const noexcept
-    { return m_size; }
-
-private:
-    char const*      m_map;
-    std::string_view m_path;
-    std::size_t      m_size;
 };
 
 }
