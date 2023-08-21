@@ -1,6 +1,7 @@
 #pragma once
 #define CEBU_INCLUDED_DIAGNOSTICS_H
 
+#include <utility>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -57,50 +58,31 @@ struct std::formatter<cebu::location>
 namespace cebu
 {
 
-enum class error_type
-{
-    parsing
-};
-
-}
-
-template<>
-struct std::formatter<cebu::error_type>
-    : formatter<string>
-{
-    auto format(cebu::error_type const& self, format_context& ctx) const
-    {
-        std::string_view str;
-        switch (self) {
-        case cebu::error_type::parsing:
-            str = "parsing error";
-            break;
-        }
-        return formatter<string>::format(std::format(
-            "{}", str
-        ), ctx);
-    }
-};
-
-namespace cebu
-{
-
-class error
+class result
 {
 public:
-    template<typename ...Args>
-    error(
-        error_type                   type,
-        location                     location,
-        std::string                  message
-    ) noexcept
+    enum variant
     {
-        std::string format{std::format(
-            "[{}@{}] {}",
-            type, location, message
-        )};
-        std::cerr << format << std::endl;
+        failure = 0,
+        success = 1
+    };
+
+    constexpr result(variant value) noexcept
+        : m_value{value}
+    {}
+
+    operator bool() const noexcept
+    {
+        return m_value;
     }
+
+    constexpr variant value() const noexcept
+    {
+        return m_value;
+    }
+
+private:
+    variant m_value;
 };
 
 }

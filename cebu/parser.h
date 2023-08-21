@@ -1,4 +1,5 @@
 #pragma once
+#include <concepts>
 #define CEBU_INCLUDED_PARSER_H
 
 #include <fcntl.h>
@@ -7,48 +8,38 @@
 #include <type_traits>
 #include <unistd.h>
 
-#include <concepts>
-
+#include <cebu/lexer.h>
 #include <cebu/syntax.h>
+#include <cebu/utilities/type_traits.h>
 
 namespace cebu
 {
 
-namespace detail
-{
-
-template<typename Needle, typename Current, typename ...Haystack>
-struct find_type
-    : std::conditional_t<
-        std::same_as<Needle, Current>,
-        Needle,
-        std::conditional_t<
-            sizeof...(Haystack) != 0,
-            find_type<Needle, Haystack...>,
-            void
-        >
-    >
-{};
-    
-}
-
-template<typename Needle, typename ...Haystack>
-struct find_type : detail::find_type<Needle, Haystack...> {};
-
-template<typename Needle, typename ...Haystack>
-constexpr auto find_type_v = find_type<Needle, Haystack...>::value;
-
-template<typename Needle, typename ...Haystack>
-constexpr auto get_option_v = find_type_v<Needle, Haystack...>;
-
 template<auto V>
 static constexpr bool is_token_array_v =
     std::is_array_v<decltype(V)>
-    && std::is_same_v<token_type, typename decltype(V)::value_type>;
+    && (std::is_same_v<token_type, typename decltype(V)::value_type>
+        || std::is_same_v<token_category, typename decltype(V)::value_type>);
 
-struct ignore_error : basic_option {};
-struct enable_on_error : basic_option {};
-struct enable_on_success : basic_option {};
+struct do_throw {};
+struct dont_throw {};
+struct ignore_error {};
+struct enable_on_error {};
+struct enable_on_success {};
+
+class end_of_file_error 
+    : public std::out_of_range
+{
+public:
+    using base_type = std::out_of_range;
+
+    end_of_file_error() noexcept
+        : base_type{"end of file"}
+    {}
+
+    [[nodiscard]]
+    char const* what() const noexcept override;
+};
 
 class parser;
 
@@ -61,6 +52,7 @@ concept parsable =
 enum class parsing_error
 {
     unexpected_token,
+    incomplete_character_error,
     unexpected_token_variant
 };
 
@@ -72,88 +64,64 @@ public:
     struct flags
     {
         std::uint32_t
-            error : 1,
+            error : 1 = false,
             padding : 31;
     };
 
-    parser(std::string_view file_path)
-        : m_file_path{file_path}
+    parser() = default;
+
+    ~parser() = default;
+
+    /// Lexes a token.
+    template<typename ...Options>
+    parser& consume() noexcept(has_type_v<dont_throw, Options...>)
     {
-        unsafely_load_file();
+        if (token() == token_type::end) [[unlikely]] {
+            if constexpr(has_type_v<dont_throw, Options...>)
+                return *this;
+            throw end_of_file_error{};
+        }
+        if (!m_lexer.lex(m_token))
+            m_flags.error = true;
+        return *this;
     }
 
-    ~parser()
-    {
-        unload_file();
-    }
-
-    parser& consume();
-    parser& peek(token& out);
-
-    template<auto Token, option ...Options>
-        requires std::is_same_v<decltype(Token), token_type>
-            || std::is_same_v<decltype(Token), token_category>
-    parser& consume_until(
-        std::function<void()> on_success = do_nothing,
-        std::function<void()> on_error = do_nothing
-    )
+    /// Consumes until the current token is equavalent to `Token` or is of the
+    /// token category `Token`.
+    template<auto Token, typename ...Options>
+    parser& consume_to(std::function<void()> on_success = do_nothing,
+                       std::function<void()> on_error = do_nothing)
     {
         for (;;) {
-            class token token;
-            peek<Options...>(token);                
-            token.discard();
-            if constexpr(std::is_same_v<decltype(Token), token_category>) {
-                if (token.is_of<Token>()) {
-                    if constexpr(get_option_v<enable_on_success, Options...>)
-                        on_success();
-                    return *this;
-                }
-            } else if constexpr(token == Token) {
-                if constexpr(get_option_v<enable_on_success, Options...>)
+            consume<Options...>();
+            token().discard();
+            if constexpr(token() == Token) {
+                if constexpr(has_type_v<enable_on_success, Options...>)
                     on_success();
                 return *this;
             }
         }
-        if constexpr(get_option_v<enable_on_error, Options...>)
+        if constexpr(has_type_v<enable_on_error, Options...>)
             resolve_error(on_error);
         return *this;
     }
 
-    template<auto Tokens, option ...Options>
-        requires is_token_array_v<Tokens>
-    parser& consume_until_one_of(
-        std::function<void()> on_error = do_nothing
-    ) {
-        for (;;) {
-            class token token;
-            peek(token);
-            token.discard();
-            if (token == Tokens)
-                return *this;
-            consume();
-        }
-        if constexpr(get_option_v<enable_on_error, Options...>)
-            resolve_error(on_error);
-        return *this;
-    }
-
-    template<parsable Syntax, option ...Options>
-    parser& parse(
-        Syntax& out,
-        std::function<void()> on_success = do_nothing,
-        std::function<void()> on_error = do_nothing
-    ) {
+    template<parsable Syntax, typename ...Options>
+    parser& parse(Syntax& out,
+                  std::function<void()> on_success = do_nothing,
+                  std::function<void()> on_error = do_nothing)
+    {
         Syntax::template parse<Options...>(*this, out);
-        if constexpr(!get_option_v<ignore_error, Options...>) {
-            if (error()) {
-                if constexpr(get_option_v<enable_on_error, Options...>) {
+        if constexpr(!has_type_v<ignore_error, Options...>) {
+            if (has_error()) {
+                if constexpr(has_type_v<enable_on_error, Options...>) {
                     // use the first function if `on_success` is disabled.
-                    if constexpr(get_option_v<enable_on_success, Options...>)
+                    if constexpr(has_type_v<enable_on_success, Options...>)
                         resolve_error(on_error);
                     else on_success();
                 }
             }
-        } else if constexpr(get_option_v<enable_on_success, Options...>)
+        } else if constexpr(has_type_v<enable_on_success, Options...>)
             on_success();
         return *this;
     }
@@ -166,44 +134,40 @@ public:
 
     parser& resolve_error(std::function<void()> fn)
     {
-        if (error()) [[unlikely]] {
+        if (has_error()) [[unlikely]] {
             fn();
             clear_error();
         }
         return *this;
     }
 
-    template<token_type Token, option ...Options>
-    parser& expect(
-        std::function<void()> on_success = do_nothing,
-        std::function<void()> on_error = do_nothing
-    )
+    template<auto Token, typename ...Options>
+    parser& expect(std::function<void()> on_success = do_nothing,
+                   std::function<void()> on_error = do_nothing)
     {
         consume<Options...>();
         if (token() != Token) [[unlikely]] {
             report_error<parsing_error::unexpected_token>();
-            if constexpr(get_option_v<enable_on_error, Options...>)
+            if constexpr(has_type_v<enable_on_error, Options...>)
                 on_error();
-        } else if constexpr(get_option_v<enable_on_success, Options...>)
+        } else if constexpr(has_type_v<enable_on_success, Options...>)
             on_success();
         return *this;
     }
 
-    template<auto Tokens, option ...Options>
+    template<auto Tokens, typename ...Options>
         requires is_token_array_v<Tokens>
-    parser& expect_one_of(
-        std::function<void()> on_success = do_nothing,
-        std::function<void()> on_error = do_nothing
-    )
+    parser& expect_one_of(std::function<void()> on_success = do_nothing,
+                          std::function<void()> on_error = do_nothing)
     {
         consume<Options...>();
         if (token() != Tokens) [[unlikely]] {
             report_error<parsing_error::unexpected_token_variant>();
-            if constexpr(get_option_v<enable_on_error, Options...>)
+            if constexpr(has_type_v<enable_on_error, Options...>)
                 resolve_error(on_error);
-            else if constexpr(!get_option_v<ignore_error, Options...>)
+            else if constexpr(!has_type_v<ignore_error, Options...>)
                 set_error();
-        } else if constexpr(get_option_v<enable_on_success, Options...>)
+        } else if constexpr(has_type_v<enable_on_success, Options...>)
             on_success();
         return *this;
     }
@@ -215,7 +179,7 @@ public:
     }
 
     [[nodiscard]]
-    bool error() const noexcept
+    bool has_error() const noexcept
     {
         return m_flags.error;
     }
@@ -232,20 +196,23 @@ public:
         return *this;
     }
 
-    template<parsing_error Error>
-    void report_error() const noexcept;
+    template<parsing_error Error, typename ...Args>
+    parser& report_error(Args... args) const noexcept;
 
-    parser& load_file()
+    void load(std::string_view const& file_path)
     {
-        unload_file();
-        unsafely_load_file();
-        return *this;
+        unload();
+        unsafely_load_file(file_path);
     }
 
-    parser& unload_file()
+    location location() const noexcept
     {
-        if (m_source.empty())
-            munmap(m_source.data(), file_size());
+        return lexer().location();
+    }
+
+    parser& unload()
+    {
+        m_source.resize(0);
         return *this;
     }
 
@@ -256,31 +223,33 @@ public:
     }
 
     [[nodiscard]]
-    position position() const noexcept
-    {
-        return {
-            .row = m_row_number,
-            .column = static_cast<std::size_t>(m_pointer - m_row)
-        };
-    }
-
-    [[nodiscard]]
     std::size_t file_size() const noexcept
     {
         return m_source.size();
     }
 
+    [[nodiscard]]
+    std::string const& source() const noexcept
+    {
+        return m_source;
+    }
+
 private:       
     std::string m_source;
-    std::string::const_iterator m_pointer;
-    std::string::const_iterator m_row;
-    std::string_view m_file_path;
-    std::size_t m_row_number;
+    class lexer m_lexer;
     class token m_token;
     struct flags m_flags;
-    int m_scope_depth;
+    int m_scope_depth{0};
 
-    void unsafely_load_file();
+    template<parsing_error Error, typename ...Args>
+    void report(Args&&... args) const noexcept
+    {
+        discard(args...);
+        std::string format{std::format("[{}] parsing error: ", location())};
+        std::cerr << format << std::endl;
+    }
+
+    void unsafely_load_file(std::string_view const& file_path);
 };
 
 }
