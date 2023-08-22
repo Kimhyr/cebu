@@ -159,13 +159,13 @@ void lexer::report(struct position const& position, Args&&... args)
     if constexpr(Error == lexing_error::incomplete_character)
         format += std::format("incomplete character token");
     else if constexpr(Error == lexing_error::unknown_character)
-        format += std::format("unknown character: {}", current());
+        format += std::format("unknown character: '{}'", current());
     else if constexpr(Error == lexing_error::number_overflow)
         format += [&](std::vector<char> const& buffer) -> std::string {
             return std::format("number overflow: {}", buffer.data());
         }(std::forward<Args>(args)...);
     else if constexpr(Error == lexing_error::unknown_escaped_character)
-        format += std::format("unknown escaped character: {}", current());
+        format += std::format("unknown escaped character: '{}'", current());
     std::cerr << format << std::endl;
 }
 

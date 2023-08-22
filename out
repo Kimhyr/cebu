@@ -1,0 +1,36 @@
+[0m[38;5;2;1m[ 42%]:[0m [2mcache compiling.debug cebu/main.cpp[0m
+/usr/bin/clang -c -Qunused-arguments -m64 -g -Wall -Wextra -O0 -std=c++20 -I. -include cebu/precompile.h -include-pch build/.objs/cebu/linux/x86_64/debug/cebu/cxx/precompile.h.pch -o build/.objs/cebu/linux/x86_64/debug/cebu/main.cpp.o cebu/main.cpp
+[0m[1;38;5;1;1merror: [0mIn file included from cebu/main.cpp:1:
+In file included from ./cebu/precompile.h:4:
+In file included from /home/king/cebu/cebu/diagnostics.h:5:
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3271:31: error: no matching constructor for initialization of 'basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>'
+          basic_format_arg<_Context> __arg(__v);
+                                     ^     ~~~
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3282:12: note: in instantiation of function template specialization 'std::__format::_Arg_store<std::basic_format_context<std::__format::_Sink_iter<char>, char>, std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>::handle>::_S_make_elt<cebu::method_definition>' requested here
+        : _M_args{_S_make_elt(__a)...}
+                  ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3331:14: note: in instantiation of function template specialization 'std::__format::_Arg_store<std::basic_format_context<std::__format::_Sink_iter<char>, char>, std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>::handle>::_Arg_store<cebu::method_definition>' requested here
+      return _Store(__fmt_args...);
+             ^
+cebu/main.cpp:16:23: note: in instantiation of function template specialization 'std::format<cebu::method_definition &>' requested here
+    std::cout << std::format("{}", out) << std::endl;
+                      ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2776:11: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from 'cebu::method_definition' to 'const std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>' for 1st argument
+    class basic_format_arg
+          ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2776:11: note: candidate constructor (the implicit move constructor) not viable: no known conversion from 'cebu::method_definition' to 'std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>' for 1st argument
+    class basic_format_arg
+          ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3026:2: note: candidate template ignored: constraints not satisfied [with _Tp = cebu::method_definition]
+        basic_format_arg(_Tp& __v) noexcept
+        ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3024:11: note: because '__format::__formattable_with<cebu::method_definition, std::basic_format_context<std::__format::_Sink_iter<char>, char> >' evaluated to false
+        requires __format::__formattable_with<_Tp, _Context>
+                 ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2231:14: note: because '__cf.format(__t, __fc)' would be invalid: function 'format' with deduced return type cannot be used before it is defined
+      { __cf.format(__t, __fc) } -> same_as<typename _Context::iterator>;
+             ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2838:7: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
+      basic_format_arg() noexcept : _M_type(__format::_Arg_none) { }
+      ^
+1 error generated.[0m

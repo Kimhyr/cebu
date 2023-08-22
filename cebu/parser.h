@@ -9,11 +9,19 @@
 #include <unistd.h>
 
 #include <cebu/lexer.h>
-#include <cebu/syntax.h>
 #include <cebu/utilities/type_traits.h>
 
 namespace cebu
 {
+
+enum class syntax_type
+{
+    method_declaration
+};
+
+struct syntax
+{
+};
 
 template<auto V>
 static constexpr bool is_token_array_v =
@@ -52,7 +60,6 @@ concept parsable =
 enum class parsing_error
 {
     unexpected_token,
-    incomplete_character_error,
     unexpected_token_variant
 };
 
@@ -147,7 +154,7 @@ public:
     {
         consume<Options...>();
         if (token() != Token) [[unlikely]] {
-            report_error<parsing_error::unexpected_token>();
+            report<parsing_error::unexpected_token>(Token);
             if constexpr(has_type_v<enable_on_error, Options...>)
                 on_error();
         } else if constexpr(has_type_v<enable_on_success, Options...>)
@@ -162,7 +169,7 @@ public:
     {
         consume<Options...>();
         if (token() != Tokens) [[unlikely]] {
-            report_error<parsing_error::unexpected_token_variant>();
+            report<parsing_error::unexpected_token_variant>(Tokens);
             if constexpr(has_type_v<enable_on_error, Options...>)
                 resolve_error(on_error);
             else if constexpr(!has_type_v<ignore_error, Options...>)
@@ -195,9 +202,6 @@ public:
         m_flags.error = false;
         return *this;
     }
-
-    template<parsing_error Error, typename ...Args>
-    parser& report_error(Args... args) const noexcept;
 
     void load(std::string_view const& file_path)
     {
@@ -234,6 +238,18 @@ public:
         return m_source;
     }
 
+    [[nodiscard]]
+    lexer const& lexer() const noexcept
+    {
+        return m_lexer;
+    }
+
+    [[nodiscard]]
+    std::string_view const& file_path() const noexcept
+    {
+        return lexer().file_path();
+    }
+
 private:       
     std::string m_source;
     class lexer m_lexer;
@@ -244,8 +260,19 @@ private:
     template<parsing_error Error, typename ...Args>
     void report(Args&&... args) const noexcept
     {
-        discard(args...);
         std::string format{std::format("[{}] parsing error: ", location())};
+        if constexpr(Error == parsing_error::unexpected_token) {
+            format += [&](auto const& expected) -> std::string {
+                return std::format("expected token `{}` instead of token `{}`", expected, token().type());
+            }(args...);
+        } else if constexpr(Error == parsing_error::unexpected_token_variant) {
+            format += "expected one of tokens:\n";
+            format += [&](auto const& tokens) -> std::string {
+                for (auto const& t : tokens)
+                    format += std::format("\t`{}`\n", t);
+            }(args...);
+            format += std::format("intead of token `{}`", token().type());
+        }
         std::cerr << format << std::endl;
     }
 

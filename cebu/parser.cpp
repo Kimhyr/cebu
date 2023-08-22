@@ -17,6 +17,7 @@ void parser::unsafely_load_file(std::string_view const& file_path)
     std::ostringstream sstr;
     sstr << file.rdbuf();
     m_source = sstr.str();
+
     m_lexer.load(file_path, m_source.begin());
 }
 

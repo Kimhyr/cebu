@@ -375,63 +375,63 @@ struct formatter<cebu::token_type>
 {
     auto format(cebu::token_type const& self, format_context& ctx) const
     {
-        string str;
+        string format;
         switch (self) {
-        case cebu::token_type::none:                    str = "none"; break;
-        case cebu::token_type::name:                    str = "name"; break;
-        case cebu::token_type::number:                  str = "number"; break;
-        case cebu::token_type::character:               str = "character"; break;
-        case cebu::token_type::string:                  str = "string"; break;
-        case cebu::token_type::end:                     str = "end"; break;
-        case cebu::token_type::b8:                      str = "b8"; break;
-        case cebu::token_type::b16:                     str = "b16"; break;
-        case cebu::token_type::b32:                     str = "b32"; break;
-        case cebu::token_type::b64:                     str = "b64"; break;
-        case cebu::token_type::i8:                      str = "i8"; break;
-        case cebu::token_type::i16:                     str = "i16"; break;
-        case cebu::token_type::i32:                     str = "i32"; break;
-        case cebu::token_type::i64:                     str = "i64"; break;
-        case cebu::token_type::f16:                     str = "f16"; break;
-        case cebu::token_type::f32:                     str = "f32"; break;
-        case cebu::token_type::f64:                     str = "f64"; break;
-        case cebu::token_type::equals_sign:             str = "equals_sign"; break;
-        case cebu::token_type::plus_sign:               str = "plus_sign"; break;
-        case cebu::token_type::minus_sign:              str = "minus_sign"; break;
-        case cebu::token_type::vertical_line:           str = "vertical_line"; break;
-        case cebu::token_type::commercial_at:           str = "commercial_at"; break;
-        case cebu::token_type::colon:                   str = "colon"; break;
-        case cebu::token_type::semicolon:               str = "semicolon"; break;
-        case cebu::token_type::comma:                   str = "comma"; break;
-        case cebu::token_type::asterisk:                str = "asterisk"; break;
-        case cebu::token_type::slash:                   str = "slash"; break;
-        case cebu::token_type::percent_sign:            str = "percent_sign"; break;
-        case cebu::token_type::left_parenthesis:        str = "left_parenthesis"; break;
-        case cebu::token_type::right_parenthesis:       str = "right_parenthesis"; break;
-        case cebu::token_type::left_angle_bracket:      str = "left_angle_bracket"; break;
-        case cebu::token_type::right_angle_bracket:     str = "right_angle_bracket"; break;
-        case cebu::token_type::left_square_bracket:     str = "left_square_bracket"; break;
-        case cebu::token_type::right_square_bracket:    str = "right_square_bracket"; break;
-        case cebu::token_type::left_curly_bracket:      str = "left_curly_bracket"; break;
-        case cebu::token_type::right_curly_bracket:     str = "right_curly_bracket"; break;
-        case cebu::token_type::double_equals_sign:      str = "double_equals_sign"; break;
-        case cebu::token_type::rightwards_double_arrow: str = "rightwards_double_arrow"; break;
-        case cebu::token_type::double_plus_sign:        str = "double_plus_sign"; break;
-        case cebu::token_type::double_minus_sign:       str = "double_minus_sign"; break;
-        case cebu::token_type::rightwards_arrow:        str = "rightwards_arrow"; break;
-        case cebu::token_type::double_vertical_line:    str = "double_vertical_line"; break;
-        case cebu::token_type::method:                  str = "method"; break;
-        case cebu::token_type::trait:                   str = "trait"; break;
-        case cebu::token_type::type:                    str = "type"; break;
-        case cebu::token_type::static_:                 str = "static"; break;
-        case cebu::token_type::let:                     str = "let"; break;
-        case cebu::token_type::if_:                     str = "if"; break;
-        case cebu::token_type::else_:                   str = "else"; break;
-        case cebu::token_type::elif:                    str = "elif"; break;
-        case cebu::token_type::return_:                 str = "return"; break;
+        case cebu::token_type::none:                    format = "none"; break;
+        case cebu::token_type::name:                    format = "name"; break;
+        case cebu::token_type::number:                  format = "number"; break;
+        case cebu::token_type::character:               format = "character"; break;
+        case cebu::token_type::string:                  format = "string"; break;
+        case cebu::token_type::end:                     format = "end"; break;
+        case cebu::token_type::b8:                      format = "b8"; break;
+        case cebu::token_type::b16:                     format = "b16"; break;
+        case cebu::token_type::b32:                     format = "b32"; break;
+        case cebu::token_type::b64:                     format = "b64"; break;
+        case cebu::token_type::i8:                      format = "i8"; break;
+        case cebu::token_type::i16:                     format = "i16"; break;
+        case cebu::token_type::i32:                     format = "i32"; break;
+        case cebu::token_type::i64:                     format = "i64"; break;
+        case cebu::token_type::f16:                     format = "f16"; break;
+        case cebu::token_type::f32:                     format = "f32"; break;
+        case cebu::token_type::f64:                     format = "f64"; break;
+        case cebu::token_type::equals_sign:             format = "equals_sign"; break;
+        case cebu::token_type::plus_sign:               format = "plus_sign"; break;
+        case cebu::token_type::minus_sign:              format = "minus_sign"; break;
+        case cebu::token_type::vertical_line:           format = "vertical_line"; break;
+        case cebu::token_type::commercial_at:           format = "commercial_at"; break;
+        case cebu::token_type::colon:                   format = "colon"; break;
+        case cebu::token_type::semicolon:               format = "semicolon"; break;
+        case cebu::token_type::comma:                   format = "comma"; break;
+        case cebu::token_type::asterisk:                format = "asterisk"; break;
+        case cebu::token_type::slash:                   format = "slash"; break;
+        case cebu::token_type::percent_sign:            format = "percent_sign"; break;
+        case cebu::token_type::left_parenthesis:        format = "left_parenthesis"; break;
+        case cebu::token_type::right_parenthesis:       format = "right_parenthesis"; break;
+        case cebu::token_type::left_angle_bracket:      format = "left_angle_bracket"; break;
+        case cebu::token_type::right_angle_bracket:     format = "right_angle_bracket"; break;
+        case cebu::token_type::left_square_bracket:     format = "left_square_bracket"; break;
+        case cebu::token_type::right_square_bracket:    format = "right_square_bracket"; break;
+        case cebu::token_type::left_curly_bracket:      format = "left_curly_bracket"; break;
+        case cebu::token_type::right_curly_bracket:     format = "right_curly_bracket"; break;
+        case cebu::token_type::double_equals_sign:      format = "double_equals_sign"; break;
+        case cebu::token_type::rightwards_double_arrow: format = "rightwards_double_arrow"; break;
+        case cebu::token_type::double_plus_sign:        format = "double_plus_sign"; break;
+        case cebu::token_type::double_minus_sign:       format = "double_minus_sign"; break;
+        case cebu::token_type::rightwards_arrow:        format = "rightwards_arrow"; break;
+        case cebu::token_type::double_vertical_line:    format = "double_vertical_line"; break;
+        case cebu::token_type::method:                  format = "method"; break;
+        case cebu::token_type::trait:                   format = "trait"; break;
+        case cebu::token_type::type:                    format = "type"; break;
+        case cebu::token_type::static_:                 format = "static"; break;
+        case cebu::token_type::let:                     format = "let"; break;
+        case cebu::token_type::if_:                     format = "if"; break;
+        case cebu::token_type::else_:                   format = "else"; break;
+        case cebu::token_type::elif:                    format = "elif"; break;
+        case cebu::token_type::return_:                 format = "return"; break;
         }
         return formatter<string>::format(std::format(
             "{}",
-            str
+            format
         ), ctx);
     }
 };
@@ -501,4 +501,37 @@ struct formatter<cebu::token>
     }
 };
 
+template<>
+struct formatter<cebu::primitive_type>
+    : formatter<string>
+{
+    auto format(cebu::primitive_type const& self, format_context& ctx) const
+    {
+        string format;
+        switch (self) {
+        case cebu::primitive_type::b8:  format = "b8"; break;
+        case cebu::primitive_type::b16: format = "b16"; break;
+        case cebu::primitive_type::b32: format = "b32"; break;
+        case cebu::primitive_type::b64: format = "b64"; break;
+        case cebu::primitive_type::i8:  format = "i8"; break;
+        case cebu::primitive_type::i16: format = "i16"; break;
+        case cebu::primitive_type::i32: format = "i32"; break;
+        case cebu::primitive_type::i64: format = "i64"; break;
+        case cebu::primitive_type::f16: format = "f16"; break;
+        case cebu::primitive_type::f32: format = "f32"; break;
+        case cebu::primitive_type::f64: format = "f64"; break;
+        }
+        return formatter<string>::format(std::format(
+            "{}",
+            self
+        ), ctx);
+    }
+};
+
+inline ostream& operator<<(ostream& os, cebu::name const& self)
+{
+    return os << self.value();
 }
+
+}
+

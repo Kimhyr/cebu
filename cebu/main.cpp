@@ -11,7 +11,9 @@ int main(int argc, char** argv)
     parser parser;
     parser.load("/home/king/cebu/test3");
     std::cout << parser.source() << std::endl;
+    parser.consume();
     method_definition out;
-    parser.parse<method_definition>(out);
-    std::cout << std::format("{}", out) << std::endl;
+    parser
+        .parse<method_definition>(out);
+    std::cout << std::format("{}", out.identifier.name) << std::endl;
 }

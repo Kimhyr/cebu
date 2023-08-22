@@ -43,7 +43,7 @@ public:
    {
       return {
          line_number(),
-         static_cast<std::size_t>(pointer() - line_pointer())
+         static_cast<std::size_t>(pointer() - line_pointer() + 1)
       };
    }
 
@@ -117,9 +117,9 @@ public:
    }
 
    [[nodiscard]]
-   std::string_view file_path() const noexcept
+   std::string_view const& file_path() const noexcept
    {
-      return m_file_path;   
+      return m_file_path;
    }
  
 private:
