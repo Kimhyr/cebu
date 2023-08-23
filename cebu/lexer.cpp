@@ -6,62 +6,73 @@
 namespace cebu
 {
 
-result lexer::lex(token& out) noexcept
+result lexer::lex(token& token) noexcept
 {
-    if (flags().reverted) [[unlikely]] {
-        m_marker = m_prior_marker;
-        m_flags.reverted = false;
-    }
+    // Skip any whitespace.
     while (std::isspace(current()))
         consume();
+
+    // Save the current position for diagnostics and save the state of the
+    // cursor.
     struct position start_position{position()};
-    m_prior_marker = m_marker;
+    m_prior_cursor = m_cursor;
+
+    // Match the current character with the start symbol of each token.
     switch (current()) {
     case '"': {
+        // Lex a string token.
+
         std::vector<char> buffer;
         for (;;) {
             consume();
             character_result result{lex_escaped_character()};
             if (result == character_result::failure) [[unlikely]] {
-                report<lexing_error::unknown_escaped_character>(start_position);
+                report<error::unknown_escaped_character>(start_position);
                 return result::failure;
             }
 
+            // Check if the string should be terminated.
             if (result == character_result::regular && current() == '"') [[unlikely]]
                 break;
             buffer.push_back(current());
         }
-        consume();
+        consume();  // Consume the terminator.
 
-        out.type = token_type::string;
-        out.value.string = std::string_view{
+        token.type = token_type::string;
+
+        // Allocate a tight space for the string then copy the string into the
+        // space.
+        token.value.string = std::string_view{
             new char[buffer.size()],
             buffer.size()
         };
-        std::copy(
-            buffer.begin(),
-            buffer.end(),
-            const_cast<char*>(out.value.string.begin())
-        );
+        std::copy(buffer.begin(), buffer.end(),
+                  const_cast<char*>(token.value.string.begin()));
     } break;
     case '\'': {
+        // Lex a character token.
+
         consume();
         character_result result{lex_escaped_character()};
         if (result == character_result::failure) [[unlikely]] {
-            report<lexing_error::unknown_escaped_character>(start_position);
+            report<error::unknown_escaped_character>(start_position);
             return result::failure;
         }
 
         if (result == character_result::regular && current() == '\'') [[unlikely]]
-            report<lexing_error::incomplete_character>(start_position);
-        out.value.character = current();
-        consume();
+            token.value.character = '\0';
+        else {
+            token.value.character = current();
+            consume();  // Consume the value.
 
-        if (current() != '\'') [[unlikely]]
-            report<lexing_error::incomplete_character>(start_position);
-        consume();
-        out.type = token_type::character;
+            if (current() != '\'') [[unlikely]]
+                report<error::incomplete_character>(start_position);
+        }
+        consume();  // Consume the terminator.
+        token.type = token_type::character;
     } break;
+
+    // The following are symbolic tokens.
     case '=':
         switch (peek()) {
         case '=':
@@ -94,15 +105,25 @@ result lexer::lex(token& out) noexcept
     case '*':
     case '/':
     case '%':
-        out.type = static_cast<token_type>(current());
+        // For single-characters, we can simply cast the current character as
+        // a token type since symbolic token types have the value of the
+        // symbol that they represent.
+        token.type = static_cast<token_type>(current());
         goto single_character;
     double_character:
-        out.type = static_cast<token_type>(current() + peek() + '\x7f');
+        // Similarly to single-characters, but we also add the peeked character
+        // and the special character `\x7f` so that the value of the token type
+        // doesn't conflict with single-character tokens.
+        token.type = static_cast<token_type>(current() + peek() + '\x7f');
         consume();
     single_character:
         consume();
         break;
     default:
+        // Instead of adding more cases for digits and letters, implications
+        // are used.
+
+        // Check for the start symbol of an identifier or keyword token.
         if (std::isalpha(current()) || current() == '_') {
             std::vector<char> buffer;
             do {
@@ -113,48 +134,55 @@ result lexer::lex(token& out) noexcept
                 || std::isdigit(current()));
             auto view{std::string_view{buffer.data(), buffer.size()}};
 
+            // First try to create a keyword token.  If this fails, create an
+            // identifier token.
             try {
-                out.type = get_keywords().at(view);
+                token.type = get_keywords().at(view);
             } catch (std::out_of_range const&) {
-                out.type = token_type::name;
-                out.value.string = std::string_view{
+                token.type = token_type::name;
+
+                // Allocate a tight space for the identifier and copy the
+                // identifier into the space.
+                token.value.string = std::string_view{
                     new char[buffer.size()],
                     buffer.size()
                 };
-                std::copy(
-                    buffer.begin(),
-                    buffer.end(),
-                    const_cast<char*>(out.value.string.begin())
-                );
+                std::copy(buffer.begin(), buffer.end(),
+                          const_cast<char*>(token.value.string.begin()));
             }
-        } else if (std::isdigit(current())) {
-            out.type = token_type::number;
+        }
+
+        // Check for the start symbol of a number token.
+        else if (std::isdigit(current())) {
+            token.type = token_type::number;
             std::vector<char> buffer;
             do {
                 buffer.push_back(current());
                 consume();
                 if (current() == '.') [[unlikely]] {
-                    if (out == token_type::decimal) [[unlikely]] {
-                        report<lexing_error::multiple_decimal_points>(start_position);
-                        return result::failure;
-                    }
-                    out.type = token_type::decimal;
+                    if (token == token_type::decimal) [[unlikely]]
+                        break;
+                    token.type = token_type::decimal;
                 }
             } while (std::isdigit(current()));
             buffer.push_back('\0');
 
+            // Try to parse the value as the token type.
             try {
-                if (out == token_type::decimal) [[unlikely]]
-                    out.value.decimal = std::stod(buffer.data());
-                else out.value.number = std::stoul(buffer.data());
+                if (token == token_type::decimal) [[unlikely]]
+                    token.value.decimal = std::stod(buffer.data());
+                else token.value.number = std::stoul(buffer.data());
             } catch (std::out_of_range const&) {
-                report<lexing_error::number_overflow>(start_position, buffer);
+                report<error::number_overflow>(start_position, buffer);
                 return result::failure;
             } catch (std::invalid_argument const&) {
                 throw std::runtime_error{"unreachable"};
             }
-        } else {
-            report<lexing_error::unknown_character>(start_position);
+        }
+
+        // The character is uknown.
+        else {
+            report<error::unknown_character>(start_position);
             return result::failure;
         }
         break;
@@ -177,22 +205,22 @@ auto lexer::lex_escaped_character() noexcept -> lexer::character_result
     }
 }
 
-template<lexing_error Error, typename ...Args>
+template<lexer::error Error, typename ...Args>
 void lexer::report(struct position const& position, Args&&... args)
 {
     struct location location{file_path(), position};
     std::string format{std::format("[{}] lexing error: ", location)};
-    if constexpr(Error == lexing_error::incomplete_character)
+    if constexpr(Error == error::incomplete_character)
         format += std::format("incomplete character token");
-    else if constexpr(Error == lexing_error::unknown_character)
+    else if constexpr(Error == error::unknown_character)
         format += std::format("unknown character: '{}'", current());
-    else if constexpr(Error == lexing_error::number_overflow)
+    else if constexpr(Error == error::number_overflow)
         format += [&](std::vector<char> const& buffer) -> std::string {
             return std::format("number overflow: {}", buffer.data());
         }(std::forward<Args>(args)...);
-    else if constexpr(Error == lexing_error::unknown_escaped_character)
+    else if constexpr(Error == error::unknown_escaped_character)
         format += std::format("unknown escaped character: '{}'", current());
-    else if constexpr(Error == lexing_error::multiple_decimal_points)
+    else if constexpr(Error == error::multiple_decimal_points)
         format += "more than one decimal point in decimal token";
     std::cerr << format << std::endl;
 }

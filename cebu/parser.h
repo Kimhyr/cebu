@@ -21,12 +21,11 @@ enum class syntax_type
     method_declaration
 };
 
-struct do_throw {};
-struct dont_throw {};
-struct ignore_error {};
-struct enable_on_error {};
-struct enable_on_success {};
-struct dont_report {};
+struct nothrow_option {};
+struct ignore_failure_option {};
+struct on_failure_option {};
+struct on_success_option {};
+struct dont_report_option {};
 
 class end_of_file_error 
     : public std::out_of_range
@@ -49,248 +48,196 @@ struct syntax_parser;
 
 template<typename T, typename ...Ts>
 concept parsable =
-    requires(parser& self, T& out) {
-        { syntax_parser<T, Ts...>::parse(self, out) } -> std::same_as<void>;
+    requires(cebu::parser& self, T& out) {
+        { cebu::syntax_parser<T, Ts...>::parse(self, out) } -> std::same_as<void>;
     };
 
 enum class parsing_error
 {
-    unexpected_token,
-    unexpected_token_variant
+    unexpected_token
 };
 
-inline auto do_nothing() -> void {}
+struct parser_flags
+{
+    unsigned char
+        failed   : 1 = false,
+        padding : 7;
+};
+
+inline void do_nothing() {}
 
 class parser
 {
 public:
-    struct flags
-    {
-        std::uint32_t
-            error : 1 = false,
-            padding : 31;
-    };
-
     parser() = default;
-
     ~parser() = default;
 
-    /// Lexes a token.
-    template<typename ...Options>
-    parser& consume() noexcept(has_type_v<dont_throw, Options...>)
+    /// `parse` - Parses a `Syntax`.
+    template<cebu::parsable Syntax, typename ...Opts>
+    cebu::parser& parse(Syntax& out,
+                        std::function<void()> on_success = do_nothing,
+                        std::function<void()> on_failure = do_nothing)
+        noexcept(cebu::find_type_v<nothrow_option, Opts...>)
     {
-        lex(m_token);
-        return *this;
-    }
-
-    /// Peeks a token
-    template<typename ...Options>
-    parser& peek(
-            token& out,
-            std::function<void()> then = do_nothing)
-    {
-        lex(out);
-        m_lexer.revert();
-        if constexpr(has_type_v<enable_on_success, Options...>)
-        return *this;
-    }
-
-    /// Consumes until the current token is equavalent to `Token` or is of the
-    /// token category `Token`.
-    template<auto Token, typename ...Options>
-    parser& consume_to(std::function<void()> on_success = do_nothing,
-                       std::function<void()> on_error = do_nothing)
-    {
-        for (;;) {
-            consume<Options...>();
-            token().discard();
-            if constexpr(token() == Token) {
-                if constexpr(has_type_v<enable_on_success, Options...>)
-                    on_success();
-                return *this;
-            }
-        }
-        if constexpr(has_type_v<enable_on_error, Options...>)
-            resolve_error(on_error);
-        else if constexpr(!has_type_v<ignore_error, Options...>)
-            set_error();
-        return *this;
-    }
-
-    template<parsable Syntax, typename ...Options>
-    parser& parse(Syntax& out,
-                  std::function<void()> on_success = do_nothing,
-                  std::function<void()> on_error = do_nothing)
-    {
-        syntax_parser<Syntax>::parse(*this, out);
-        if constexpr(!has_type_v<ignore_error, Options...>) {
-            if (has_error()) {
-                if constexpr(has_type_v<enable_on_error, Options...>) {
-                    // use the first function if `on_success` is disabled.
-                    if constexpr(has_type_v<enable_on_success, Options...>)
-                        resolve_error(on_error);
-                    else on_success();
-                } else if constexpr(!has_type_v<ignore_error, Options...>)
-                    set_error();
-            }
-        } else if constexpr(has_type_v<enable_on_success, Options...>)
+        cebu::syntax_parser<Syntax, Opts...>::parse(*this, out);
+        if (this->failed()) [[unlikely]] {
+            if constexpr(cebu::find_type_v<cebu::on_failure_option, Opts...>) {
+                if constexpr(cebu::find_type_v<cebu::on_success_option, Opts...>)
+                    this->resolve_failure(on_failure);
+                else this->resolve_failure(on_success);
+            } else if constexpr(!cebu::find_type_v<cebu::ignore_failure_option, Opts...>)
+                this->set_failed();
+        } else if constexpr(cebu::find_type_v<cebu::on_success_option, Opts...>)
             on_success();
         return *this;
     }
 
-    parser& then(std::function<void()> fn)
+    /// `consume` - Consumes the current token.
+    /// 
+    /// # Notes
+    ///
+    /// If the `peek` was previously invoked, the options are ignored.
+    template<typename ...Opts>
+    cebu::parser& consume(std::function<void()> on_success = do_nothing,
+                          std::function<void()> on_failure   = do_nothing)
+        noexcept(cebu::find_type_v<nothrow_option, Opts...>)
+    {
+        if (this->token() == cebu::token_type::end) [[unlikely]] {
+            if constexpr(cebu::find_type_v<cebu::nothrow_option, Opts...>)
+                return *this;
+            throw cebu::end_of_file_error{};
+        }
+        if (this->m_lexer.lex(m_token)) [[unlikely]] {
+            if constexpr(cebu::find_type_v<cebu::on_success_option, Opts...>)
+                on_success();
+        } else if constexpr(cebu::find_type_v<cebu::on_failure_option, Opts...>) {
+            if constexpr(cebu::find_type_v<cebu::on_success_option, Opts...>)
+                resolve_failure(on_failure);
+            else resolve_failure(on_success);
+        } else if constexpr(!cebu::find_type_v<cebu::ignore_failure_option, Opts...>)
+            this->set_failed();
+        return *this;
+    }
+
+    /// `expect` - Consumes and, if the consumed token is not equavalent to
+    /// `Token`, the "failure" flag is set.
+    template<auto Token, typename ...Opts>
+    cebu::parser& expect(std::function<void()> on_success = do_nothing,
+                         std::function<void()> on_failure = do_nothing)
+    {
+        this->consume<Opts...>();
+        if (this->token() == Token) [[likely]] {
+            if constexpr(cebu::find_type_v<cebu::on_success_option, Opts...>)
+                on_success();
+        } else {
+            if constexpr(!cebu::find_type_v<cebu::dont_report_option, Opts...>)
+                this->report<cebu::parsing_error::unexpected_token>(Token);
+            if constexpr(cebu::find_type_v<cebu::on_failure_option, Opts...>)
+                this->resolve_failure(on_failure);
+            else if constexpr(!cebu::find_type_v<cebu::ignore_failure_option, Opts...>)
+                this->set_failed();
+        }
+        return *this;
+    }
+
+    /// `peek` - Gives the current token then consumes the current token.
+    template<typename ...Opts>
+    cebu::parser& peek(cebu::token&          token,
+                       std::function<void()> on_success = do_nothing,
+                       std::function<void()> on_failure = do_nothing)
+        noexcept(cebu::find_type_v<cebu::nothrow_option, Opts...>)
+    {
+        token = this->token();
+        return this->consume<Opts...>(on_success, on_failure);
+    }
+
+    /// `then` - Invokes `fn`.
+    cebu::parser& then(std::function<void()> fn)
     {
         fn();
         return *this;
     }
 
-    parser& resolve_error(std::function<void()> fn)
+    /// `resolve_failure` - Invokes `fn` and unsets the "failed" flags.
+    cebu::parser& resolve_failure(std::function<void()> fn)
     {
-        if (has_error()) [[unlikely]] {
-            fn();
-            clear_error();
-        }
+        fn();
+        this->unset_failed();
         return *this;
     }
 
-    template<auto Token, typename ...Options>
-    parser& expect(std::function<void()> on_success = do_nothing,
-                   std::function<void()> on_error = do_nothing)
+    /// `load` - Unloads then loads the file at `file_path`.
+    cebu::parser& load(std::string_view const& file_path)
+    { return this->unload().unsafely_load_file(file_path); }
+
+    /// `unload` - Unloads the source.
+    cebu::parser& unload()
     {
-        consume<Options...>();
-        if (token() != Token) [[unlikely]] {
-            if constexpr(!has_type_v<dont_report, Options...>)
-                report<parsing_error::unexpected_token>(Token);
-            if constexpr(has_type_v<enable_on_error, Options...>)
-                resolve_error(on_error);
-            else if constexpr(!has_type_v<ignore_error, Options...>)
-                set_error();
-        } else if constexpr(has_type_v<enable_on_success, Options...>)
-            on_success();
+        this->m_source.resize(0);
         return *this;
     }
 
-    template<auto Tokens, typename ...Options>
-    parser& expect_one_of(std::function<void()> on_success = do_nothing,
-                          std::function<void()> on_error = do_nothing)
-    {
-        consume<Options...>();
-        if (token() != Tokens) [[unlikely]] {
-            if constexpr(!has_type_v<dont_report, Options...>)
-                report<parsing_error::unexpected_token_variant>(Tokens);
-            if constexpr(has_type_v<enable_on_error, Options...>)
-                resolve_error(on_error);
-            else if constexpr(!has_type_v<ignore_error, Options...>)
-                set_error();
-        } else if constexpr(has_type_v<enable_on_success, Options...>)
-            on_success();
-        return *this;
-    }
-
-    template<auto Tokens, typename ...Options>
-    parser& peek_one_of(std::function<void()> on_success = do_nothing,
-                        std::function<void()> on_error = do_nothing)
-    {
-    }
-
+    /// `failed` - Returns the "failed" flag.
     [[nodiscard]]
-    flags& flags() noexcept
-    {
-        return m_flags;
-    }
+    bool failed() const noexcept
+    { return m_flags.failed; }
 
-    [[nodiscard]]
-    bool has_error() const noexcept
+    /// `get_failed` - Same as `cebu::parser::failed` but returns to `failed`.
+    cebu::parser& get_failed(bool& failed) noexcept
     {
-        return m_flags.error;
-    }
-
-    parser& set_error() noexcept
-    {
-        m_flags.error = true;
+        failed = this->failed();
         return *this;
     }
 
-    parser& clear_error() noexcept
+    /// `set_failed` - Sets the "failed" flag to true.
+    cebu::parser& set_failed() noexcept
     {
-        m_flags.error = false;
+        this->m_flags.failed = true;
         return *this;
     }
 
-    void load(std::string_view const& file_path)
+    /// `unset_failed` - Unsets the "failed" flag to false.
+    cebu::parser& unset_failed() noexcept
     {
-        unload();
-        unsafely_load_file(file_path);
-    }
-
-    location location() const noexcept
-    {
-        return lexer().location();
-    }
-
-    parser& unload()
-    {
-        m_source.resize(0);
+        this->m_flags.failed = false;
         return *this;
     }
 
-    [[nodiscard]]
-    token const& token() const noexcept
-    {
-        return m_token;
-    }
+    /// `location` - Returns the location of the cursor.
+    cebu::location location() const noexcept
+    { return this->m_lexer.location(); }
 
+    /// `token` - Returns the current token.
     [[nodiscard]]
-    std::size_t file_size() const noexcept
-    {
-        return m_source.size();
-    }
+    cebu::token const& token() const noexcept
+    { return this->m_token; }
 
+    /// `source` - Returns the contents of the source.
     [[nodiscard]]
     std::string const& source() const noexcept
-    {
-        return m_source;
-    }
+    { return this->m_source; }
 
-    [[nodiscard]]
-    lexer const& lexer() const noexcept
-    {
-        return m_lexer;
-    }
-
+    /// `file_path` - Returns the source's file path.
     [[nodiscard]]
     std::string_view const& file_path() const noexcept
-    {
-        return lexer().file_path();
-    }
+    { return this->m_lexer.file_path(); }
 
 private:       
-    std::string m_source;
-    class lexer m_lexer;
-    class token m_token;
-    struct flags m_flags;
-    int m_scope_depth{0};
-
-
-    template<typename ...Options>
-    void lex(class token& out) noexcept(has_type_v<dont_throw, Options...>)
-    {
-        if (token() == token_type::end) [[unlikely]] {
-            if constexpr(has_type_v<dont_throw, Options...>)
-                return;
-            throw end_of_file_error{};
-        }
-        if (!m_lexer.lex(out)) [[unlikely]] {
-            if constexpr(!has_type_v<ignore_error, Options...>)
-                m_flags.error = true;
-        }
-    }
+    std::string        m_source;
+    cebu::lexer        m_lexer;
+    cebu::token        m_token;
+    cebu::parser_flags m_flags;
+    int                m_scope_depth{0};
 
     template<parsing_error Error, typename ...Args>
     void report(Args&&... args) const noexcept;
 
-    void unsafely_load_file(std::string_view const& file_path);
+    cebu::parser& unsafely_load_file(std::string_view const& file_path);
 };
+
+//
+// Parsers
+//
 
 template<typename ...Ts>
 struct syntax_parser<identifier, Ts...>

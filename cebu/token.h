@@ -1,10 +1,10 @@
 #pragma once
-#include <format>
 #define CEBU_INCLUDED_TOKEN_H
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <format>
 #include <limits>
 #include <string_view>
 
@@ -84,27 +84,10 @@ class token
     friend class lexer;
         
 public:
-    template<token_category Category>
-    auto is_of() const noexcept -> bool
-    {
-        if constexpr(Category == token_category::valuable)
-            return is_valuable();
-        else if constexpr(Category == token_category::punctuator)
-            return is_punctuator();
-        else if constexpr(Category == token_category::delimiter)
-            return is_delimiter();
-        else if constexpr(Category == token_category::primitive_type)
-            return is_primitive_type();
-        else if constexpr(Category == token_category::determiner)
-            return is_determiner();
-    }
+    bool is_valuable() const noexcept
+    { return type >= token_type::name && type <= token_type::string; }
 
-    auto is_valuable() const noexcept -> bool
-    {
-        return type >= token_type::name && type <= token_type::string;
-    }
-
-    auto is_delimiter() const noexcept -> bool
+    bool is_delimiter() const noexcept
     {
         switch (type) {
         case token_type::left_parenthesis:
@@ -121,7 +104,7 @@ public:
         }
     }
 
-    auto is_punctuator() const noexcept -> bool
+    bool is_punctuator() const noexcept
     {
         return !is_delimiter()
             && static_cast<int>(type) >= 33
@@ -146,30 +129,19 @@ public:
             && type < token_type::_;
     }
 
-    friend constexpr
-    bool operator==(token const& left, token const& right)
-    {
-        return left.type == right.type;
-    }
+    friend constexpr bool operator==(token const& left, token const& right)
+    { return left.type == right.type; }
 
-    template<typename T>
-    friend constexpr
-    bool operator==(token const& left,
-                    T const& right)
-    {
-        return *std::find(right.begin(), right.end(), left) == left;
-    }  
+    template<typename T> friend constexpr
+    bool operator==(token const& left, T const& right)
+    { return *std::find(right.begin(), right.end(), left) == left; }  
 
     friend constexpr
-    bool operator==(token const& left,
-                    token_type const& right)
-    {
-        return left.type == right;
-    }
+    bool operator==(token const& left, token_type const& right)
+    { return left.type == right; }
 
     friend constexpr
-    bool operator==(token const& left,
-                    token_category const& right)
+    bool operator==(token const& left, token_category const& right)
     {
         switch (right) {
         case token_category::valuable:
@@ -189,17 +161,12 @@ public:
         }
     }
 
-    auto discard() const noexcept -> void
+    void discard() const noexcept
     {
         if (*this == token_type::string) [[unlikely]]
             delete value.string.data();
     }
 
-    operator std::string_view const&() const { return value.string; }
-    operator std::uint64_t const&()    const { return value.number; }
-    operator double const&()           const { return value.decimal; }
-    operator char const&()             const { return value.character; }
-    
     union {
         std::string_view string;
         std::size_t      number;
@@ -208,6 +175,11 @@ public:
     }               value{};
     enum token_type type{token_type::none};
     std::byte       padding[[maybe_unused]][4];
+
+    operator std::string_view const&() const { return value.string; }
+    operator std::uint64_t const&() const { return value.number; }
+    operator double const&() const { return value.decimal; }
+    operator char const&() const { return value.character; }
 };
 
 }

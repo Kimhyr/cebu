@@ -72,14 +72,10 @@ public:
     {}
 
     operator bool() const noexcept
-    {
-        return m_value;
-    }
+    { return m_value; }
 
     constexpr variant value() const noexcept
-    {
-        return m_value;
-    }
+    { return m_value; }
 
 private:
     variant m_value;
