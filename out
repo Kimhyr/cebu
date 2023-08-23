@@ -1,36 +1,157 @@
-[0m[38;5;2;1m[ 42%]:[0m [2mcache compiling.debug cebu/main.cpp[0m
+[0m[38;5;2;1m[  0%]:[0m [2mcache compiling.debug cebu/precompile.h[0m
+/usr/bin/clang -c -Qunused-arguments -m64 -g -Wall -Wextra -O0 -std=c++20 -I. -x c++-header -o build/.objs/cebu/linux/x86_64/debug/cebu/cxx/precompile.h.pch cebu/precompile.h
+[0m[38;5;2;1m[ 14%]:[0m [2mcache compiling.debug cebu/parser.cpp[0m
+/usr/bin/clang -c -Qunused-arguments -m64 -g -Wall -Wextra -O0 -std=c++20 -I. -include cebu/precompile.h -include-pch build/.objs/cebu/linux/x86_64/debug/cebu/cxx/precompile.h.pch -o build/.objs/cebu/linux/x86_64/debug/cebu/parser.cpp.o cebu/parser.cpp
+[0m[38;5;2;1m[ 14%]:[0m [2mcache compiling.debug cebu/lexer.cpp[0m
+/usr/bin/clang -c -Qunused-arguments -m64 -g -Wall -Wextra -O0 -std=c++20 -I. -include cebu/precompile.h -include-pch build/.objs/cebu/linux/x86_64/debug/cebu/cxx/precompile.h.pch -o build/.objs/cebu/linux/x86_64/debug/cebu/lexer.cpp.o cebu/lexer.cpp
+[0m[38;5;2;1m[ 14%]:[0m [2mcache compiling.debug cebu/main.cpp[0m
 /usr/bin/clang -c -Qunused-arguments -m64 -g -Wall -Wextra -O0 -std=c++20 -I. -include cebu/precompile.h -include-pch build/.objs/cebu/linux/x86_64/debug/cebu/cxx/precompile.h.pch -o build/.objs/cebu/linux/x86_64/debug/cebu/main.cpp.o cebu/main.cpp
+[0m[38;5;2;1m[ 14%]:[0m [2mcache compiling.debug cebu/syntax.cpp[0m
+/usr/bin/clang -c -Qunused-arguments -m64 -g -Wall -Wextra -O0 -std=c++20 -I. -include cebu/precompile.h -include-pch build/.objs/cebu/linux/x86_64/debug/cebu/cxx/precompile.h.pch -o build/.objs/cebu/linux/x86_64/debug/cebu/syntax.cpp.o cebu/syntax.cpp
 [0m[1;38;5;1;1merror: [0mIn file included from cebu/main.cpp:1:
-In file included from ./cebu/precompile.h:4:
-In file included from /home/king/cebu/cebu/diagnostics.h:5:
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3271:31: error: no matching constructor for initialization of 'basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>'
-          basic_format_arg<_Context> __arg(__v);
-                                     ^     ~~~
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3282:12: note: in instantiation of function template specialization 'std::__format::_Arg_store<std::basic_format_context<std::__format::_Sink_iter<char>, char>, std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>::handle>::_S_make_elt<cebu::method_definition>' requested here
-        : _M_args{_S_make_elt(__a)...}
-                  ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3331:14: note: in instantiation of function template specialization 'std::__format::_Arg_store<std::basic_format_context<std::__format::_Sink_iter<char>, char>, std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>::handle>::_Arg_store<cebu::method_definition>' requested here
-      return _Store(__fmt_args...);
-             ^
-cebu/main.cpp:16:23: note: in instantiation of function template specialization 'std::format<cebu::method_definition &>' requested here
-    std::cout << std::format("{}", out) << std::endl;
-                      ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2776:11: note: candidate constructor (the implicit copy constructor) not viable: no known conversion from 'cebu::method_definition' to 'const std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>' for 1st argument
-    class basic_format_arg
-          ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2776:11: note: candidate constructor (the implicit move constructor) not viable: no known conversion from 'cebu::method_definition' to 'std::basic_format_arg<std::basic_format_context<std::__format::_Sink_iter<char>, char>>' for 1st argument
-    class basic_format_arg
-          ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3026:2: note: candidate template ignored: constraints not satisfied [with _Tp = cebu::method_definition]
-        basic_format_arg(_Tp& __v) noexcept
-        ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:3024:11: note: because '__format::__formattable_with<cebu::method_definition, std::basic_format_context<std::__format::_Sink_iter<char>, char> >' evaluated to false
-        requires __format::__formattable_with<_Tp, _Context>
+In file included from ./cebu/precompile.h:6:
+./cebu/parser.h:171:21: error: invalid operands to binary expression ('const cebu::token' and 'const std::array<cebu::token_type, 2>')
+        if (token() != Tokens) [[unlikely]] {
+            ~~~~~~~ ^  ~~~~~~
+./cebu/parser.h:330:26: note: in instantiation of function template specialization 'cebu::parser::expect_one_of<{{44, 41}}, cebu::enable_on_success>' requested here
+                        .expect_one_of<std::array{
+                         ^
+/home/king/cebu/cebu/token.h:150:10: note: candidate function not viable: no known conversion from 'const std::array<cebu::token_type, 2>' to 'const cebu::token' for 2nd argument
+    bool operator==(token const& left, token const& right)
+         ^
+/home/king/cebu/cebu/token.h:164:10: note: candidate function not viable: no known conversion from 'const std::array<cebu::token_type, 2>' to 'const cebu::token_type' for 2nd argument
+    bool operator==(token const& left,
+         ^
+/home/king/cebu/cebu/token.h:171:10: note: candidate function not viable: no known conversion from 'const std::array<cebu::token_type, 2>' to 'const cebu::token_category' for 2nd argument
+    bool operator==(token const& left,
+         ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/system_error:449:3: note: candidate function not viable: no known conversion from 'const cebu::token' to 'const std::error_code' for 1st argument
+  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+  ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/system_error:465:3: note: candidate function not viable: no known conversion from 'const cebu::token' to 'const std::error_code' for 1st argument
+  operator==(const error_code& __lhs, const error_condition& __rhs) noexcept
+  ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/system_error:465:3: note: candidate function (with reversed parameter order) not viable: no known conversion from 'const cebu::token' to 'const std::error_condition' for 1st argument
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/system_error:480:3: note: candidate function not viable: no known conversion from 'const cebu::token' to 'const std::error_condition' for 1st argument
+  operator==(const error_condition& __lhs,
+  ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/variant:1249:18: note: candidate function not viable: no known conversion from 'const cebu::token' to 'std::monostate' for 1st argument
+  constexpr bool operator==(monostate, monostate) noexcept { return true; }
                  ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2231:14: note: because '__cf.format(__t, __fc)' would be invalid: function 'format' with deduced return type cannot be used before it is defined
-      { __cf.format(__t, __fc) } -> same_as<typename _Context::iterator>;
-             ^
-/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/format:2838:7: note: candidate constructor not viable: requires 0 arguments, but 1 was provided
-      basic_format_arg() noexcept : _M_type(__format::_Arg_none) { }
-      ^
+/home/king/cebu/cebu/token.h:164:10: note: candidate function (with reversed parameter order) not viable: no known conversion from 'const cebu::token' to 'const cebu::token_type' for 1st argument
+    bool operator==(token const& left,
+         ^
+/home/king/cebu/cebu/token.h:171:10: note: candidate function (with reversed parameter order) not viable: no known conversion from 'const cebu::token' to 'const cebu::token_category' for 1st argument
+    bool operator==(token const& left,
+         ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:534:5: note: candidate template ignored: could not match 'const reverse_iterator<_IteratorL>' against 'const cebu::token'
+    operator==(const reverse_iterator<_IteratorL>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:534:5: note: candidate template ignored: could not match 'reverse_iterator' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:542:5: note: candidate template ignored: could not match 'const reverse_iterator<_IteratorL>' against 'const cebu::token'
+    operator!=(const reverse_iterator<_IteratorL>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:593:5: note: candidate template ignored: could not match 'const reverse_iterator<_Iterator>' against 'const cebu::token'
+    operator==(const reverse_iterator<_Iterator>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:1678:5: note: candidate template ignored: could not match 'const move_iterator<_IteratorL>' against 'const cebu::token'
+    operator==(const move_iterator<_IteratorL>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:1678:5: note: candidate template ignored: could not match 'move_iterator' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_iterator.h:1748:5: note: candidate template ignored: could not match 'const move_iterator<_Iterator>' against 'const cebu::token'
+    operator==(const move_iterator<_Iterator>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/array:297:5: note: candidate template ignored: could not match 'const array<_Tp, _Nm>' against 'const cebu::token'
+    operator==(const array<_Tp, _Nm>& __one, const array<_Tp, _Nm>& __two)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/postypes.h:192:5: note: candidate template ignored: could not match 'const fpos<_StateT>' against 'const cebu::token'
+    operator==(const fpos<_StateT>& __lhs, const fpos<_StateT>& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/postypes.h:197:5: note: candidate template ignored: could not match 'const fpos<_StateT>' against 'const cebu::token'
+    operator!=(const fpos<_StateT>& __lhs, const fpos<_StateT>& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/allocator.h:237:5: note: candidate template ignored: could not match 'const allocator<_T1>' against 'const cebu::token'
+    operator==(const allocator<_T1>&, const allocator<_T2>&)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/allocator.h:237:5: note: candidate template ignored: could not match 'allocator' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/string_view:608:5: note: candidate template ignored: could not match 'basic_string_view<_CharT, _Traits>' against 'cebu::token'
+    operator==(basic_string_view<_CharT, _Traits> __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/string_view:615:5: note: candidate template ignored: could not match 'basic_string_view<_CharT, _Traits>' against 'cebu::token'
+    operator==(basic_string_view<_CharT, _Traits> __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/string_view:615:5: note: candidate template ignored: could not match 'basic_string_view' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/basic_string.h:3698:5: note: candidate template ignored: could not match 'const basic_string<_CharT, _Traits, _Alloc>' against 'const cebu::token'
+    operator==(const basic_string<_CharT, _Traits, _Alloc>& __lhs,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/basic_string.h:3715:5: note: candidate template ignored: could not match 'const basic_string<_CharT, _Traits, _Alloc>' against 'const cebu::token'
+    operator==(const basic_string<_CharT, _Traits, _Alloc>& __lhs,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/basic_string.h:3715:5: note: candidate template ignored: could not match 'basic_string' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/tuple:1905:5: note: candidate template ignored: could not match 'const tuple<_TElements...>' against 'const cebu::token'
+    operator==(const tuple<_TElements...>& __t,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/tuple:1905:5: note: candidate template ignored: could not match 'tuple' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/streambuf_iterator.h:234:5: note: candidate template ignored: could not match 'const istreambuf_iterator<_CharT, _Traits>' against 'const cebu::token'
+    operator==(const istreambuf_iterator<_CharT, _Traits>& __a,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1222:5: note: candidate template ignored: could not match 'const optional<_Tp>' against 'const cebu::token'
+    operator==(const optional<_Tp>& __lhs, const optional<_Up>& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1222:5: note: candidate template ignored: could not match 'optional' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1231:5: note: candidate template ignored: could not match 'const optional<_Tp>' against 'const cebu::token'
+    operator!=(const optional<_Tp>& __lhs, const optional<_Up>& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1282:5: note: candidate template ignored: could not match 'const optional<_Tp>' against 'const cebu::token'
+    operator==(const optional<_Tp>& __lhs, nullopt_t) noexcept
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1282:5: note: candidate template ignored: could not match 'optional' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1350:5: note: candidate template ignored: could not match 'const optional<_Tp>' against 'const cebu::token'
+    operator==(const optional<_Tp>& __lhs, const _Up& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1350:5: note: candidate template ignored: could not match 'optional' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1356:5: note: candidate template ignored: could not match 'optional' against 'array'
+    operator==(const _Up& __lhs, const optional<_Tp>& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1356:5: note: candidate template ignored: could not match 'const optional<_Tp>' against 'const cebu::token'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1362:5: note: candidate template ignored: could not match 'const optional<_Tp>' against 'const cebu::token'
+    operator!=(const optional<_Tp>& __lhs, const _Up& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/optional:1368:5: note: candidate template ignored: could not match 'optional' against 'array'
+    operator!=(const _Up& __lhs, const optional<_Tp>& __rhs)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/variant:1242:3: note: candidate template ignored: could not match 'const variant<_Types...>' against 'const cebu::token'
+  _VARIANT_RELATION_FUNCTION_TEMPLATE(==, equal)
+  ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/variant:1217:20: note: expanded from macro '_VARIANT_RELATION_FUNCTION_TEMPLATE'
+    constexpr bool operator __OP(const variant<_Types...>& __lhs, \
+                   ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/variant:1243:3: note: candidate template ignored: could not match 'const variant<_Types...>' against 'const cebu::token'
+  _VARIANT_RELATION_FUNCTION_TEMPLATE(!=, not_equal)
+  ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/variant:1217:20: note: expanded from macro '_VARIANT_RELATION_FUNCTION_TEMPLATE'
+    constexpr bool operator __OP(const variant<_Types...>& __lhs, \
+                   ^
+/home/king/cebu/cebu/token.h:157:10: note: candidate template ignored: substitution failure: deduced non-type template argument does not have the same type as the corresponding template parameter ('unsigned long' vs 'int')
+    bool operator==(token const& left,
+         ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_pair.h:812:5: note: candidate template ignored: could not match 'const pair<_T1, _T2>' against 'const cebu::token'
+    operator==(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y)
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/std_function.h:737:5: note: candidate template ignored: could not match 'const function<_Res (_Args...)>' against 'const cebu::token'
+    operator==(const function<_Res(_Args...)>& __f, nullptr_t) noexcept
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/std_function.h:737:5: note: candidate template ignored: could not match 'function' against 'array'
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/unordered_map.h:2143:5: note: candidate template ignored: could not match 'const unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>' against 'const cebu::token'
+    operator==(const unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/unordered_map.h:2157:5: note: candidate template ignored: could not match 'const unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>' against 'const cebu::token'
+    operator==(const unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>& __x,
+    ^
+/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/13.2.1/../../../../include/c++/13.2.1/bits/stl_vector.h:2037:5: note: candidate template ignored: could not match 'const vector<_Tp, _Alloc>' against 'const cebu::token'
+    operator==(const vector<_Tp, _Alloc>& __x, const vector<_Tp, _Alloc>& __y)
+    ^
+/home/king/cebu/cebu/token.h:157:10: note: candidate template ignored: could not match 'const std::array<token_type, Size>' against 'const cebu::token'
+    bool operator==(token const& left,
+         ^
 1 error generated.[0m

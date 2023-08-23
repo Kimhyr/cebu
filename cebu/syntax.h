@@ -4,144 +4,386 @@
 #include <cebu/diagnostics.h>
 #include <cebu/token.h>
 #include <cebu/utilities/type_traits.h>
-#include <cebu/parser.h>
 
 namespace cebu
 {
 
-struct identifier;
+/// Program
+///
+/// # Syntax
+///
+/// program -> +declaration
+class program;
+
+///
+class identifier;
+
+/// Statements
+///
+/// # Syntax
+///
+/// statement -> expression ';'
+///            | declaration
+class statement;
+
+/// Expressions
+///
+/// # Syntax
+///
+/// expression -> binary
+///             | integer
+///             | decimal
+///             | character
+///             | string
+///             | parenthesized
+///             | path
+///             | invocation
+///             | cast
+///             | addition
+///             | subtraction
+///             | disjunction
+///             | implication
+///             | equation
+/// parenthesized -> '(' expression ')'
+/// path -> name +['::' name]
+/// invocation -> path '(' mapping +[',' mapping] ')'
+/// cast -> path ':' type
+/// addition -> expression '+' expression
+/// subtraction -> expression '-' expression
+/// equation -> expressiong '==' expression
+/// disjunction -> expression '|' expression
+/// implication -> expression '=>' expression ',' expression
+/// assignment -> path '=' expression
+class expression;
+class binary;
+class integer;
+class decimal;
+class character;
+class string;
+class parenthesized;
+class path;
+class invocation;
+class cast;
+class addition;
+class subtraction;
+class disjunction;
+class equation;
+class implication;
+class assignment;
+
+/// Declarations - A referenceable grammar.
+///
+/// # Syntax
+///
+/// method-declaration -> ['method'] identifier lambda-type body
+/// value-declaration -> ['value'] identifier ':' type body
+class declaration;
+class method_declaration;
+class value_declaration;
+
+/// Types
+///
+/// type -> primitive-type
+///       | tuple-type
+///       | lambda-type
+/// primitive-type -> ('b'|'i')('8'|'16'|'32'|'64')
+///                 | 'f'('16'|'32'|'64')
+/// tuple-type -> '(' (value-declaration|type) +[',' (value-declaration|type)] ')'
+/// lambda-type -> tuple-type '->' type
+class type;
 enum class primitive_type;
-struct value_definition;
-struct method_definition;
+class tuple_type;
+class lambda_type;
 
-struct identifier
+/// Parts - A part of a whole syntax.
+///
+/// # Syntax
+///
+/// mapping -> name ':' expression
+/// body -> '=' expression ';'
+///       | '{' +[statement] '}'
+///       | ';'
+class mapping;
+class body;
+
+class declaration
 {
-    name name;
-
-    template<typename ...Options>
-    static void parse(parser& parser, identifier& out)
+public:
+    enum type_t
     {
-        parser
-            .expect<token_type::name, enable_on_success>([&] {
-                out.name = parser.token();
-            });
-    }
+        method,
+        value_
+    };
+
+    operator method_declaration*&() { return value.method; }
+    operator value_declaration*&()  { return value.value; }
+
+    union {
+        method_declaration* method;
+        value_declaration*  value;
+    }         value;
+    type_t    type;
+    std::byte padding[[maybe_unused]][4];
 };
 
-enum class type_type
+class identifier
 {
-    primitive
+public:
+    std::string_view name;
 };
 
-struct type
+class body
 {
+public:
+    std::vector<statement> statements;
+};
+
+class type
+{
+public:
+    enum type_t
+    {
+        primitive,
+        tuple,
+        lambda
+    };
+
+    operator primitive_type&() { return value.primitive; }
+    operator tuple_type*&()    { return value.tuple; }
+    operator lambda_type*&()   { return value.lambda; }
+
     union {
         primitive_type primitive;
-    } value;
-    type_type type_;
-
-    template<typename...>
-    static void parse(parser&, type&);
-
-    constexpr type(primitive_type primitive) noexcept
-        : value{.primitive = primitive},
-          type_{type_type::primitive}
-    {}
+        tuple_type*    tuple;
+        lambda_type*   lambda;
+    }      value;
+    type_t type;
 };
 
-constexpr type b8_type{primitive_type::b8};
-constexpr type b16_type{primitive_type::b16};
-constexpr type b32_type{primitive_type::b32};
-constexpr type b64_type{primitive_type::b64};
-constexpr type i8_type{primitive_type::i8};
-constexpr type i16_type{primitive_type::i16};
-constexpr type i32_type{primitive_type::i32};
-constexpr type i64_type{primitive_type::i64};
-constexpr type f16_type{primitive_type::f16};
-constexpr type f32_type{primitive_type::f32};
-constexpr type f64_type{primitive_type::f64};
-
-template<typename Syntax>
-struct reference
+template<int Precedence>
+class basic_expression
 {
-    Syntax* pointer;
-
-    template<typename...>
-    static void parse(parser&, reference&);
+public:
+    static constexpr int precedence = Precedence;
 };
 
-enum class expression_type
+class path
+    : public basic_expression<1>
 {
-    equation,
-    scoped_expression,
-    implication,
-    invocation,
-    subtraction,
-    disjunction,
-    addition
+public:
+    std::vector<identifier> value;
 };
 
-struct expression
+class cast
+    : public basic_expression<3>
 {
-    union {
-    } ;
+public:
+    path path;
+    type type;
 };
 
-enum class statement_type
+class basic_declaration
 {
-    value_definition,
-    method_definition,
-    expression
-};
-
-struct statement
-{
-    union {
-    } ;
-};
-
-struct body
-{
-    std::vector<statement> statements;
-
-    template<typename...>
-    static void parse(parser&, body&);
-};
-
-struct value_definition
-{
+public:
     identifier identifier;
-    reference<type> type;
-    body body;
-
-    template<typename...>
-    static void parse(parser&, value_definition&);
 };
 
-struct parameters
+class value_declaration
+    : public basic_declaration
 {
-    std::vector<value_definition> definitions;
-
-    template<typename...>
-    static void parse(parser&, parameters&);
+public:
+    type       type;
+    body       body;
 };
 
-struct method_definition
+enum class primitive_type
 {
-    identifier identifier;
-    parameters parameters;
-    reference<type> type;
-    body body;
+    b8 = static_cast<int>(token_type::b8),
+    b16,
+    b32,
+    b64,
+    i8,
+    i16,
+    i32,
+    i64,
+    f16,
+    f32,
+    f64
+};
 
-    template<typename ...Options>
-    static void parse(parser& parser, method_definition& out)
+class tuple_type
+{
+public:
+    std::vector<value_declaration> mappings;
+};
+
+class lambda_type
+{
+public:
+    tuple_type tuple;
+    type       return_type;
+};
+
+/// 
+/// let foo: i32 { if 32 == 2 { return 0; } else return 3; }
+///
+
+class expression
+{
+public:
+    using precedence_t = unsigned;
+
+    enum type_t
     {
-        parser
-            .parse<struct identifier>(out.identifier)
-            .parse<struct parameters>(out.parameters)
-            .parse<reference<struct type>>(out.type)
-            .parse<struct body>(out.body);
-    }
+        // 0
+        integer,
+        decimal,
+        character,
+        string,
+
+        // 1
+        parenthesized,
+        path,
+
+        // 2
+        invocation,
+
+        // 3
+        cast,
+        
+        // 6
+        addition,
+        subtraction,
+
+        // 10
+        equation,
+
+        // 15
+        disjunction,
+
+        // 16
+        implication,
+        assignment
+    };
+
+    operator cebu::path*&()        { return value.path; }
+    operator cebu::invocation*&()  { return value.invocation; }
+    operator cebu::cast*&()        { return value.cast; }
+    operator cebu::addition*&()    { return value.addition; }
+    operator cebu::subtraction*&() { return value.subtraction; }
+    operator cebu::disjunction*&() { return value.disjunction; }
+    operator cebu::implication*&() { return value.implication; }
+    operator cebu::equation*&()    { return value.equation; }
+
+    union {
+        cebu::binary*        binary;
+        cebu::integer*       integer;
+        cebu::character*     character;
+        cebu::string*        string;
+        cebu::parenthesized* parenthesized;
+        cebu::path*          path;
+        cebu::invocation*    invocation;
+        cebu::cast*          cast;
+        cebu::addition*      addition;
+        cebu::subtraction*   subtraction;
+        cebu::disjunction*   disjunction;
+        cebu::implication*   implication;
+        cebu::equation*      equation;
+    }      value;
+    type_t type;
+};
+
+class statement
+{
+public:
+    enum type_t
+    {
+        expression,
+        declaration
+    };
+
+    operator cebu::expression&()  { return value.expression; }
+    operator cebu::declaration&() { return value.declaration; }
+
+    union {
+        cebu::expression  expression;
+        cebu::declaration declaration;
+    }      value;
+    type_t type;
+};
+
+class program
+{
+public:
+    std::vector<declaration> declarations;
+};
+
+template<typename Value>
+class basic_literal
+    : public basic_expression<0>
+{
+public:
+    Value value;  
+};
+
+class binary         : public basic_literal<std::uint64_t> {};
+class integer        : public basic_literal<std::int64_t> {};
+class decimal: public basic_literal<double> {};
+class character      : public basic_literal<char> {};
+class string         : public basic_literal<std::vector<char>> {};
+
+class parenthesized
+    : public basic_expression<1>
+{
+public:
+    cebu::expression expression;
+};
+
+class invocation
+    : public basic_expression<2>
+{
+public:   
+    path                 path;
+    std::vector<mapping> arguments;
+};
+
+template<int Precedence>
+class basic_binary_expression
+    : public basic_expression<Precedence>
+{
+public:
+    expression left;
+    expression right;
+};
+
+class addition    : public basic_binary_expression<6> {};
+class subtraction : public basic_binary_expression<6> {};
+class equation    : public basic_expression<10> {};
+class disjunction : public basic_expression<15> {};
+
+class implication
+    : public basic_expression<16>
+{
+public:
+    expression condition;
+    expression consequence;
+    expression contrapositive;
+};
+
+class assignment
+    : public basic_expression<16>
+{
+public:
+    path path;
+    body body;
+};
+
+class method_declaration
+    : public basic_declaration
+{
+public:
+    lambda_type lambda;
+    body        body;
 };
 
 }

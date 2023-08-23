@@ -27,6 +27,7 @@ enum class token_type
     none = -1000,
     name,
     number,
+    decimal,
     character,
     string,
     end = '\0',
@@ -78,165 +79,11 @@ enum class token_type
     _ = 1200
 };
 
-template<token_type Type, typename Value>
-class basic_token
-{
-public:
-    using value_type = Value;
-
-    basic_token(value_type value) noexcept
-        : m_value{value}
-    {}
-
-    [[nodiscard]]
-    value_type const& value() const noexcept
-    {
-        return m_value;    
-    }
-
-    [[nodiscard]]
-    token_type const& type() const noexcept
-    {
-        return m_type;
-    }
-
-private:
-    value_type m_value;
-    std::byte  m_padding[
-        std::conditional_t<
-            Type == token_type::character,
-            std::integral_constant<int, 3>,
-            std::integral_constant<int, 4>
-    >::value];
-    token_type m_type{Type};
-};
-
-class name
-    : public basic_token<token_type::name, std::string_view>
-{
-public:
-    using base_type = basic_token<token_type::name, std::string_view>;
-    using value_type = std::string_view;
-
-    name()
-        : base_type{""} {}
-    
-    explicit name(value_type value) noexcept
-        : base_type{value}
-    {}
-};
-
-class character
-    : public basic_token<token_type::character, char>
-{
-public:
-    using base_type = basic_token<token_type::character, char>;
-    using value_type = base_type::value_type;
-        
-    explicit character(value_type value) noexcept
-        : base_type{value}
-    {}
-};
-
-class number
-    : public basic_token<token_type::number, std::size_t>
-{
-public:
-    using base_type = basic_token<token_type::number, std::size_t>;
-    using value_type = base_type::value_type;
-        
-    explicit number(value_type value) noexcept
-        : base_type{value}
-    {}
-
-    [[nodiscard]]
-    auto is_16bit() const noexcept -> bool
-    {
-        return this->value() > std::numeric_limits<std::uint8_t>::max();
-    }
-
-    [[nodiscard]]
-    auto is_32bit() const noexcept -> bool
-    {
-        return this->value() > std::numeric_limits<std::uint16_t>::max();
-    }
-
-    [[nodiscard]]
-    auto is_64bit() const noexcept -> bool
-    {
-        return this->value() > std::numeric_limits<std::uint32_t>::max();
-    }
-};
-
-class string
-    : public basic_token<token_type::string, std::string_view>
-{
-public:
-    using base_type = basic_token<token_type::string, std::string_view>;
-    using value_type = base_type::value_type;
-        
-    explicit string(value_type value) noexcept
-        : base_type{value}
-    {}
-};
-
-enum class primitive_type
-{
-    b8 = 0, // 'b8',
-    b16,    // 'b16',
-    b32,    // 'b32',
-    b64,    // 'b64',
-    i8,     // 'i8',
-    i16,    // 'i16',
-    i32,    // 'i32',
-    i64,    // 'i64',
-    f16,    // 'f16',
-    f32,    // 'f32',
-    f64     // 'f64',
-};
-
 class token
 {
     friend class lexer;
         
 public:
-    token() = default;
-
-    token(token_type type, std::string_view string) noexcept
-        : m_value{.string = string}
-        , m_type{type}
-    {}
-
-    token(char character) noexcept
-        : m_value{.character = character}
-        , m_type{token_type::character}
-    {}
-
-    token(std::size_t number) noexcept
-        : m_value{.number = number}
-        , m_type{token_type::number}
-    {}
-
-    operator name() const noexcept
-    {
-        return name{m_value.string};
-    }
-
-    operator character() const noexcept
-    {
-        return character{m_value.character};
-    }
-
-    operator number() const noexcept
-    {
-        return number{m_value.number};
-    }
-
-    operator string() const noexcept
-    {
-        return string{m_value.string};
-    }
-
     template<token_category Category>
     auto is_of() const noexcept -> bool
     {
@@ -254,12 +101,12 @@ public:
 
     auto is_valuable() const noexcept -> bool
     {
-        return type() >= token_type::name && type() <= token_type::string;
+        return type >= token_type::name && type <= token_type::string;
     }
 
     auto is_delimiter() const noexcept -> bool
     {
-        switch (type()) {
+        switch (type) {
         case token_type::left_parenthesis:
         case token_type::left_curly_bracket:
         case token_type::left_square_bracket:
@@ -277,47 +124,47 @@ public:
     auto is_punctuator() const noexcept -> bool
     {
         return !is_delimiter()
-            && static_cast<int>(type()) >= 33
-            && static_cast<int>(type()) < 1000;
+            && static_cast<int>(type) >= 33
+            && static_cast<int>(type) < 1000;
     }
 
     bool is_primitive_type() const noexcept
     {
-        return type() >= token_type::b8
-            && type() < static_cast<token_type>(33);
+        return type >= token_type::b8
+            && type < static_cast<token_type>(33);
     }
 
     bool is_determiner() const noexcept
     {
-        return type() >= token_type::method
-            && type() < token_type::let;
+        return type >= token_type::method
+            && type < token_type::let;
     }
 
     bool is_nondeterminer() const noexcept
     {
-        return type() >= token_type::let
-            && type() < token_type::_;
+        return type >= token_type::let
+            && type < token_type::_;
     }
 
     friend constexpr
     bool operator==(token const& left, token const& right)
     {
-        return left.type() == right.type();
+        return left.type == right.type;
     }
 
-    template<int Size>
+    template<typename T>
     friend constexpr
     bool operator==(token const& left,
-                    std::array<token_type, Size> const& right)
+                    T const& right)
     {
-        return std::find(right.begin(), right.end(), left) == left;
+        return *std::find(right.begin(), right.end(), left) == left;
     }  
 
     friend constexpr
     bool operator==(token const& left,
                     token_type const& right)
     {
-        return left.type() == right;
+        return left.type == right;
     }
 
     friend constexpr
@@ -342,26 +189,25 @@ public:
         }
     }
 
-    [[nodiscard]]
-    auto type() const noexcept -> token_type const&
-    {
-        return m_type;
-    }
-
     auto discard() const noexcept -> void
     {
         if (*this == token_type::string) [[unlikely]]
-            delete m_value.string.data();
+            delete value.string.data();
     }
 
-private:
+    operator std::string_view const&() const { return value.string; }
+    operator std::uint64_t const&()    const { return value.number; }
+    operator double const&()           const { return value.decimal; }
+    operator char const&()             const { return value.character; }
+    
     union {
         std::string_view string;
         std::size_t      number;
+        double           decimal;
         char             character;
-    }          m_value{};
-    enum token_type m_type{token_type::none};
-    std::byte  m_padding[[maybe_unused]][4];
+    }               value{};
+    enum token_type type{token_type::none};
+    std::byte       padding[[maybe_unused]][4];
 };
 
 }
@@ -375,59 +221,161 @@ struct formatter<cebu::token_type>
 {
     auto format(cebu::token_type const& self, format_context& ctx) const
     {
-        string format;
+        string format{"token_type: "};
         switch (self) {
-        case cebu::token_type::none:                    format = "none"; break;
-        case cebu::token_type::name:                    format = "name"; break;
-        case cebu::token_type::number:                  format = "number"; break;
-        case cebu::token_type::character:               format = "character"; break;
-        case cebu::token_type::string:                  format = "string"; break;
-        case cebu::token_type::end:                     format = "end"; break;
-        case cebu::token_type::b8:                      format = "b8"; break;
-        case cebu::token_type::b16:                     format = "b16"; break;
-        case cebu::token_type::b32:                     format = "b32"; break;
-        case cebu::token_type::b64:                     format = "b64"; break;
-        case cebu::token_type::i8:                      format = "i8"; break;
-        case cebu::token_type::i16:                     format = "i16"; break;
-        case cebu::token_type::i32:                     format = "i32"; break;
-        case cebu::token_type::i64:                     format = "i64"; break;
-        case cebu::token_type::f16:                     format = "f16"; break;
-        case cebu::token_type::f32:                     format = "f32"; break;
-        case cebu::token_type::f64:                     format = "f64"; break;
-        case cebu::token_type::equals_sign:             format = "equals_sign"; break;
-        case cebu::token_type::plus_sign:               format = "plus_sign"; break;
-        case cebu::token_type::minus_sign:              format = "minus_sign"; break;
-        case cebu::token_type::vertical_line:           format = "vertical_line"; break;
-        case cebu::token_type::commercial_at:           format = "commercial_at"; break;
-        case cebu::token_type::colon:                   format = "colon"; break;
-        case cebu::token_type::semicolon:               format = "semicolon"; break;
-        case cebu::token_type::comma:                   format = "comma"; break;
-        case cebu::token_type::asterisk:                format = "asterisk"; break;
-        case cebu::token_type::slash:                   format = "slash"; break;
-        case cebu::token_type::percent_sign:            format = "percent_sign"; break;
-        case cebu::token_type::left_parenthesis:        format = "left_parenthesis"; break;
-        case cebu::token_type::right_parenthesis:       format = "right_parenthesis"; break;
-        case cebu::token_type::left_angle_bracket:      format = "left_angle_bracket"; break;
-        case cebu::token_type::right_angle_bracket:     format = "right_angle_bracket"; break;
-        case cebu::token_type::left_square_bracket:     format = "left_square_bracket"; break;
-        case cebu::token_type::right_square_bracket:    format = "right_square_bracket"; break;
-        case cebu::token_type::left_curly_bracket:      format = "left_curly_bracket"; break;
-        case cebu::token_type::right_curly_bracket:     format = "right_curly_bracket"; break;
-        case cebu::token_type::double_equals_sign:      format = "double_equals_sign"; break;
-        case cebu::token_type::rightwards_double_arrow: format = "rightwards_double_arrow"; break;
-        case cebu::token_type::double_plus_sign:        format = "double_plus_sign"; break;
-        case cebu::token_type::double_minus_sign:       format = "double_minus_sign"; break;
-        case cebu::token_type::rightwards_arrow:        format = "rightwards_arrow"; break;
-        case cebu::token_type::double_vertical_line:    format = "double_vertical_line"; break;
-        case cebu::token_type::method:                  format = "method"; break;
-        case cebu::token_type::trait:                   format = "trait"; break;
-        case cebu::token_type::type:                    format = "type"; break;
-        case cebu::token_type::static_:                 format = "static"; break;
-        case cebu::token_type::let:                     format = "let"; break;
-        case cebu::token_type::if_:                     format = "if"; break;
-        case cebu::token_type::else_:                   format = "else"; break;
-        case cebu::token_type::elif:                    format = "elif"; break;
-        case cebu::token_type::return_:                 format = "return"; break;
+        case cebu::token_type::none:
+            format += "none";
+            break;
+        case cebu::token_type::name:
+            format += "name";
+            break;
+        case cebu::token_type::number:
+            format += "number";
+            break;
+        case cebu::token_type::character:
+            format += "character";
+            break;
+        case cebu::token_type::string:
+            format += "string";
+            break;
+        case cebu::token_type::end:
+            format += "end";
+            break;
+        case cebu::token_type::b8:
+            format += "b8";
+            break;
+        case cebu::token_type::b16:
+            format += "b16";
+            break;
+        case cebu::token_type::b32:
+            format += "b32";
+            break;
+        case cebu::token_type::b64:
+            format += "b64";
+            break;
+        case cebu::token_type::i8:
+            format += "i8";
+            break;
+        case cebu::token_type::i16:
+            format += "i16";
+            break;
+        case cebu::token_type::i32:
+            format += "i32";
+            break;
+        case cebu::token_type::i64:
+            format += "i64";
+            break;
+        case cebu::token_type::f16:
+            format += "f16";
+            break;
+        case cebu::token_type::f32:
+            format += "f32";
+            break;
+        case cebu::token_type::f64:
+            format += "f64";
+            break;
+        case cebu::token_type::equals_sign:
+            format += "equals_sign";
+            break;
+        case cebu::token_type::plus_sign:
+            format += "plus_sign";
+            break;
+        case cebu::token_type::minus_sign:
+            format += "minus_sign";
+            break;
+        case cebu::token_type::vertical_line:
+            format += "vertical_line";
+            break;
+        case cebu::token_type::commercial_at:
+            format += "commercial_at";
+            break;
+        case cebu::token_type::colon:
+            format += "colon";
+            break;
+        case cebu::token_type::semicolon:
+            format += "semicolon";
+            break;
+        case cebu::token_type::comma:
+            format += "comma";
+            break;
+        case cebu::token_type::asterisk:
+            format += "asterisk";
+            break;
+        case cebu::token_type::slash:
+            format += "slash";
+            break;
+        case cebu::token_type::percent_sign:
+            format += "percent_sign";
+            break;
+        case cebu::token_type::left_parenthesis:
+            format += "left_parenthesis";
+            break;
+        case cebu::token_type::right_parenthesis:
+            format += "right_parenthesis";
+            break;
+        case cebu::token_type::left_angle_bracket:
+            format += "left_angle_bracket";
+            break;
+        case cebu::token_type::right_angle_bracket:
+            format += "right_angle_bracket";
+            break;
+        case cebu::token_type::left_square_bracket:
+            format += "left_square_bracket";
+            break;
+        case cebu::token_type::right_square_bracket:
+            format += "right_square_bracket";
+            break;
+        case cebu::token_type::left_curly_bracket:
+            format += "left_curly_bracket";
+            break;
+        case cebu::token_type::right_curly_bracket:
+            format += "right_curly_bracket";
+            break;
+        case cebu::token_type::double_equals_sign:
+            format += "double_equals_sign";
+            break;
+        case cebu::token_type::rightwards_double_arrow:
+            format += "rightwards_double_arrow";
+            break;
+        case cebu::token_type::double_plus_sign:
+            format += "double_plus_sign";
+            break;
+        case cebu::token_type::double_minus_sign:
+            format += "double_minus_sign";
+            break;
+        case cebu::token_type::rightwards_arrow:
+            format += "rightwards_arrow";
+            break;
+        case cebu::token_type::double_vertical_line:
+            format += "double_vertical_line";
+            break;
+        case cebu::token_type::method:
+            format += "method";
+            break;
+        case cebu::token_type::trait:
+            format += "trait";
+            break;
+        case cebu::token_type::type:
+            format += "type";
+            break;
+        case cebu::token_type::static_:
+            format += "static";
+            break;
+        case cebu::token_type::let:
+            format += "let";
+            break;
+        case cebu::token_type::if_:
+            format += "if";
+            break;
+        case cebu::token_type::else_:
+            format += "else";
+            break;
+        case cebu::token_type::elif:
+            format += "elif";
+            break;
+        case cebu::token_type::return_:
+            format += "return";
+            break;
         }
         return formatter<string>::format(std::format(
             "{}",
@@ -437,101 +385,31 @@ struct formatter<cebu::token_type>
 };
 
 template<>
-struct formatter<cebu::name>
-    : formatter<string>
-{
-    auto format(cebu::name const& self, format_context& ctx) const
-    {
-        return formatter<string>::format(std::format(
-            "{}",
-            self.value()
-        ), ctx);
-    }
-};
-
-template<>
-struct formatter<cebu::character>
-    : formatter<string>
-{
-    auto format(cebu::character const& self, format_context& ctx) const
-    {
-        return formatter<string>::format(std::format(
-            "'{}'",
-            self.value()
-        ), ctx);
-    }
-};
-
-template<>
-struct formatter<cebu::string>
-    : formatter<string>
-{
-    auto format(cebu::string const& self, format_context& ctx) const
-    {
-        return formatter<string>::format(std::format(
-            "\"{}\"",
-            self.value()
-        ), ctx);
-    }
-};
-
-template<>
-struct formatter<cebu::number>
-    : formatter<string>
-{
-    auto format(cebu::string const& self, format_context& ctx) const
-    {
-        return formatter<string>::format(std::format(
-            "{}",
-            self.value()
-        ), ctx);
-    }
-};
-
-template<>
 struct formatter<cebu::token>
     : formatter<string>
 {
-    auto format(cebu::string const& self, format_context& ctx) const
+    auto format(cebu::token const& self, format_context& ctx) const
     {
-        return formatter<string>::format(std::format(
-            "{}: {}",
-            self.type(), self.value()
-        ), ctx);
-    }
-};
-
-template<>
-struct formatter<cebu::primitive_type>
-    : formatter<string>
-{
-    auto format(cebu::primitive_type const& self, format_context& ctx) const
-    {
-        string format;
-        switch (self) {
-        case cebu::primitive_type::b8:  format = "b8"; break;
-        case cebu::primitive_type::b16: format = "b16"; break;
-        case cebu::primitive_type::b32: format = "b32"; break;
-        case cebu::primitive_type::b64: format = "b64"; break;
-        case cebu::primitive_type::i8:  format = "i8"; break;
-        case cebu::primitive_type::i16: format = "i16"; break;
-        case cebu::primitive_type::i32: format = "i32"; break;
-        case cebu::primitive_type::i64: format = "i64"; break;
-        case cebu::primitive_type::f16: format = "f16"; break;
-        case cebu::primitive_type::f32: format = "f32"; break;
-        case cebu::primitive_type::f64: format = "f64"; break;
+        string format{std::format("token:\n\t{}", self.type)};
+        if (self.is_valuable()) {
+            format += "\n\tvalue: ";
+            switch (self.type) {
+            case cebu::token_type::string:
+                format += std::format("\"{}\"", self.value.string);
+                break;
+            case cebu::token_type::name:
+                format += std::format("{}", self.value.string);
+                break;
+            case cebu::token_type::character:
+                format += std::format("'{}'", self.value.character);
+                break;
+            case cebu::token_type::number:
+                format += std::format("{}", self.value.number);
+                break;
+            }
         }
-        return formatter<string>::format(std::format(
-            "{}",
-            self
-        ), ctx);
+        return formatter<string>::format(format, ctx);
     }
 };
 
-inline ostream& operator<<(ostream& os, cebu::name const& self)
-{
-    return os << self.value();
 }
-
-}
-

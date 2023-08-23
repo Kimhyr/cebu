@@ -15,7 +15,24 @@ enum class lexing_error
    incomplete_character,
    unknown_character,
    number_overflow,
-   unknown_escaped_character
+   unknown_escaped_character,
+   multiple_decimal_points
+};
+
+struct lexer_marker
+{
+    using const_pointer = char const*;
+
+    const_pointer pointer{nullptr};
+    const_pointer line_pointer{pointer};
+    std::size_t   line_number{1}; 
+};
+
+struct lexer_flags
+{
+    std::uint64_t
+        reverted : 1 = false,
+        padding : 63;
 };
 
 class lexer
@@ -23,7 +40,7 @@ class lexer
    friend class parser;
 
 public:
-   using const_pointer = std::string::const_iterator;
+   using const_pointer = char const*;
       
    lexer() noexcept
    {}
@@ -31,12 +48,21 @@ public:
    void load(std::string_view file_path, const_pointer pointer) noexcept
    {
       m_file_path = file_path;
-      m_pointer = pointer;
-      m_line_pointer = pointer;
-      m_line_number = 1;
+      m_marker.pointer = pointer;
+      m_marker.line_pointer = pointer;
+      m_marker.line_number = 1;
    }
 
    result lex(token&) noexcept;
+
+    /// WARNING: This assumes the lexer already lexed something.
+    void revert() noexcept
+    {
+        m_flags.reverted = true;
+        lexer_marker temp{m_marker};
+        m_marker = m_prior_marker;
+        m_prior_marker = temp;
+    }
 
    [[nodiscard]]
    position position() const noexcept
@@ -89,31 +115,31 @@ public:
    [[nodiscard]]
    char current() const noexcept
    {
-      return *m_pointer;   
+      return *pointer();
    }
 
    [[nodiscard]]
    char peek() const noexcept
    {
-      return m_pointer[1];
+      return pointer()[1];
    }
 
    [[nodiscard]]
    const_pointer pointer() const noexcept
    {
-      return m_pointer;
+      return m_marker.pointer;
    }
 
    [[nodiscard]]
    const_pointer line_pointer() const noexcept
    {
-      return m_line_pointer;
+      return m_marker.line_pointer;
    }
 
    [[nodiscard]]
    std::size_t line_number() const noexcept
    {
-      return m_line_number;
+      return m_marker.line_number;
    }
 
    [[nodiscard]]
@@ -121,19 +147,25 @@ public:
    {
       return m_file_path;
    }
+
+    [[nodiscard]]
+    lexer_flags const& flags() const noexcept
+    {
+        return m_flags;
+    }
  
 private:
-   std::string_view m_file_path;
-   const_pointer m_pointer{nullptr};
-   const_pointer m_line_pointer{m_pointer};
-   std::size_t m_line_number{1};
+    std::string_view m_file_path;
+    lexer_marker     m_prior_marker;
+    lexer_marker     m_marker;
+    lexer_flags      m_flags;
 
-   enum class character_result
-   {
-      failure = -1,
-      regular = 0,
-      escaped = 1
-   };
+    enum class character_result
+    {
+        failure = -1,
+        regular = 0,
+        escaped = 1
+    };
 
    character_result lex_escaped_character() noexcept;
 
@@ -145,8 +177,8 @@ private:
       if (current() == '\0') [[unlikely]]
          return;
       if (current() == '\n') [[unlikely]]
-         m_line_pointer = m_pointer;
-      ++m_pointer;
+         m_marker.line_pointer = pointer();
+      ++m_marker.pointer;
    }
 };
 

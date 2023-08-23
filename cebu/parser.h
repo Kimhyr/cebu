@@ -1,5 +1,4 @@
 #pragma once
-#include <concepts>
 #define CEBU_INCLUDED_PARSER_H
 
 #include <fcntl.h>
@@ -8,7 +7,10 @@
 #include <type_traits>
 #include <unistd.h>
 
+#include <concepts>
+
 #include <cebu/lexer.h>
+#include <cebu/syntax.h>
 #include <cebu/utilities/type_traits.h>
 
 namespace cebu
@@ -19,21 +21,12 @@ enum class syntax_type
     method_declaration
 };
 
-struct syntax
-{
-};
-
-template<auto V>
-static constexpr bool is_token_array_v =
-    std::is_array_v<decltype(V)>
-    && (std::is_same_v<token_type, typename decltype(V)::value_type>
-        || std::is_same_v<token_category, typename decltype(V)::value_type>);
-
 struct do_throw {};
 struct dont_throw {};
 struct ignore_error {};
 struct enable_on_error {};
 struct enable_on_success {};
+struct dont_report {};
 
 class end_of_file_error 
     : public std::out_of_range
@@ -51,10 +44,13 @@ public:
 
 class parser;
 
-template<typename T, typename ...Options>
+template<typename T, typename ...Ts>
+struct syntax_parser;
+
+template<typename T, typename ...Ts>
 concept parsable =
     requires(parser& self, T& out) {
-        { T::template parse<Options...>(self, out) } -> std::same_as<void>;
+        { syntax_parser<T, Ts...>::parse(self, out) } -> std::same_as<void>;
     };
 
 enum class parsing_error
@@ -83,13 +79,19 @@ public:
     template<typename ...Options>
     parser& consume() noexcept(has_type_v<dont_throw, Options...>)
     {
-        if (token() == token_type::end) [[unlikely]] {
-            if constexpr(has_type_v<dont_throw, Options...>)
-                return *this;
-            throw end_of_file_error{};
-        }
-        if (!m_lexer.lex(m_token))
-            m_flags.error = true;
+        lex(m_token);
+        return *this;
+    }
+
+    /// Peeks a token
+    template<typename ...Options>
+    parser& peek(
+            token& out,
+            std::function<void()> then = do_nothing)
+    {
+        lex(out);
+        m_lexer.revert();
+        if constexpr(has_type_v<enable_on_success, Options...>)
         return *this;
     }
 
@@ -110,6 +112,8 @@ public:
         }
         if constexpr(has_type_v<enable_on_error, Options...>)
             resolve_error(on_error);
+        else if constexpr(!has_type_v<ignore_error, Options...>)
+            set_error();
         return *this;
     }
 
@@ -118,7 +122,7 @@ public:
                   std::function<void()> on_success = do_nothing,
                   std::function<void()> on_error = do_nothing)
     {
-        Syntax::template parse<Options...>(*this, out);
+        syntax_parser<Syntax>::parse(*this, out);
         if constexpr(!has_type_v<ignore_error, Options...>) {
             if (has_error()) {
                 if constexpr(has_type_v<enable_on_error, Options...>) {
@@ -126,7 +130,8 @@ public:
                     if constexpr(has_type_v<enable_on_success, Options...>)
                         resolve_error(on_error);
                     else on_success();
-                }
+                } else if constexpr(!has_type_v<ignore_error, Options...>)
+                    set_error();
             }
         } else if constexpr(has_type_v<enable_on_success, Options...>)
             on_success();
@@ -154,22 +159,8 @@ public:
     {
         consume<Options...>();
         if (token() != Token) [[unlikely]] {
-            report<parsing_error::unexpected_token>(Token);
-            if constexpr(has_type_v<enable_on_error, Options...>)
-                on_error();
-        } else if constexpr(has_type_v<enable_on_success, Options...>)
-            on_success();
-        return *this;
-    }
-
-    template<auto Tokens, typename ...Options>
-        requires is_token_array_v<Tokens>
-    parser& expect_one_of(std::function<void()> on_success = do_nothing,
-                          std::function<void()> on_error = do_nothing)
-    {
-        consume<Options...>();
-        if (token() != Tokens) [[unlikely]] {
-            report<parsing_error::unexpected_token_variant>(Tokens);
+            if constexpr(!has_type_v<dont_report, Options...>)
+                report<parsing_error::unexpected_token>(Token);
             if constexpr(has_type_v<enable_on_error, Options...>)
                 resolve_error(on_error);
             else if constexpr(!has_type_v<ignore_error, Options...>)
@@ -177,6 +168,29 @@ public:
         } else if constexpr(has_type_v<enable_on_success, Options...>)
             on_success();
         return *this;
+    }
+
+    template<auto Tokens, typename ...Options>
+    parser& expect_one_of(std::function<void()> on_success = do_nothing,
+                          std::function<void()> on_error = do_nothing)
+    {
+        consume<Options...>();
+        if (token() != Tokens) [[unlikely]] {
+            if constexpr(!has_type_v<dont_report, Options...>)
+                report<parsing_error::unexpected_token_variant>(Tokens);
+            if constexpr(has_type_v<enable_on_error, Options...>)
+                resolve_error(on_error);
+            else if constexpr(!has_type_v<ignore_error, Options...>)
+                set_error();
+        } else if constexpr(has_type_v<enable_on_success, Options...>)
+            on_success();
+        return *this;
+    }
+
+    template<auto Tokens, typename ...Options>
+    parser& peek_one_of(std::function<void()> on_success = do_nothing,
+                        std::function<void()> on_error = do_nothing)
+    {
     }
 
     [[nodiscard]]
@@ -257,26 +271,67 @@ private:
     struct flags m_flags;
     int m_scope_depth{0};
 
-    template<parsing_error Error, typename ...Args>
-    void report(Args&&... args) const noexcept
+
+    template<typename ...Options>
+    void lex(class token& out) noexcept(has_type_v<dont_throw, Options...>)
     {
-        std::string format{std::format("[{}] parsing error: ", location())};
-        if constexpr(Error == parsing_error::unexpected_token) {
-            format += [&](auto const& expected) -> std::string {
-                return std::format("expected token `{}` instead of token `{}`", expected, token().type());
-            }(args...);
-        } else if constexpr(Error == parsing_error::unexpected_token_variant) {
-            format += "expected one of tokens:\n";
-            format += [&](auto const& tokens) -> std::string {
-                for (auto const& t : tokens)
-                    format += std::format("\t`{}`\n", t);
-            }(args...);
-            format += std::format("intead of token `{}`", token().type());
+        if (token() == token_type::end) [[unlikely]] {
+            if constexpr(has_type_v<dont_throw, Options...>)
+                return;
+            throw end_of_file_error{};
         }
-        std::cerr << format << std::endl;
+        if (!m_lexer.lex(out)) [[unlikely]] {
+            if constexpr(!has_type_v<ignore_error, Options...>)
+                m_flags.error = true;
+        }
     }
 
+    template<parsing_error Error, typename ...Args>
+    void report(Args&&... args) const noexcept;
+
     void unsafely_load_file(std::string_view const& file_path);
+};
+
+template<typename ...Ts>
+struct syntax_parser<identifier, Ts...>
+{
+    static void parse(parser& parser, identifier& out);
+};
+
+template<typename ...Ts>
+struct syntax_parser<body, Ts...>
+{
+    static void parse(parser& parser, body& out);
+};
+
+template<typename ...Ts>
+struct syntax_parser<type, Ts...>
+{
+    static void parse(parser&, type&);
+};
+
+template<typename ...Ts>
+struct syntax_parser<value_declaration, Ts...>
+{
+    static void parse(parser& parser, value_declaration& out);
+};
+
+template<typename ...Ts>
+struct syntax_parser<tuple_type, Ts...>
+{
+    static void parse(parser& parser, tuple_type& out);
+};
+
+template<typename ...Ts>
+struct syntax_parser<lambda_type, Ts...>
+{
+    static void parse(parser& parser, lambda_type& out);
+};
+
+template<typename ...Ts>
+struct syntax_parser<method_declaration, Ts...>
+{
+    static void parse(parser& parser, method_declaration& out);
 };
 
 }
